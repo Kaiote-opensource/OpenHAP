@@ -1,5 +1,5 @@
 // const SOCKET_URL = "wss://echo.websocket.org";
-const SOCKET_URL = "ws://localhost:8999";
+const SOCKET_URL = "ws://192.168.4.1:80";
 const LOG = true
 
 var urls = {
