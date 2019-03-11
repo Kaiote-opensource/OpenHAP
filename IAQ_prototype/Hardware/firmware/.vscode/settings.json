@@ -1,0 +1,8 @@
+{
+    "C_Cpp.intelliSenseEngineFallback": "Enabled",
+    "files.associations": {
+        "esp_system.h": "c",
+        "stdlib.h": "c",
+        "esp_gap_ble_api.h": "c"
+    }
+}

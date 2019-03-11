@@ -1,0 +1,32 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "/home/alois/Documents/build_systems/espressif/esp-idf/components/bt/bluedroid/api/include/api",
+                "/home/alois/Documents/build_systems/espressif/esp-idf/components/esp32/include",
+                "/home/alois/Documents/build_systems/espressif/esp-idf/components/freertos/include",
+                "/home/alois/Documents/build_systems/espressif/esp-idf/components/newlib/include",
+                "/home/alois/Documents/build_systems/espressif/esp-idf/components/spi_flash/sim",
+                "/home/alois/Documents/build_systems/espressif/esp-idf/components/log/include",
+                "/home/alois/Documents/build_systems/espressif/esp-idf/components/soc/esp32/include",
+                "/home/alois/Documents/build_systems/espressif/esp-idf/components/heap/include",
+                "/home/alois/Documents/build_systems/espressif/esp-idf/components/soc/include",
+                "/home/alois/Documents/build_systems/espressif/esp-idf/components/driver/include"
+            ],
+            "defines": [],
+            "compilerPath": "/home/alois/Documents/build_systems/espressif/xtensa-esp32-elf-linux64-1.22.0-80-g6c4433a-5.2.0/xtensa-esp32-elf/bin/",
+            "cStandard": "c99",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "clang-x64",
+            "browse": {
+                "path": [
+                    "/home/alois/Documents/build_systems/espressif/esp-idf/components/"
+                ],
+                "limitSymbolsToIncludedHeaders": true
+            }
+        }
+    ],
+    "version": 4
+}
