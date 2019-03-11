@@ -1,0 +1,47 @@
+.header-desktop3 {
+    background: #4e4c4c;
+    display: -webkit-box;
+    display: -webkit-flex;
+    display: -moz-box;
+    display: -ms-flexbox;
+    display: flex;
+    -webkit-box-align: center;
+    -webkit-align-items: center;
+    -moz-box-align: center;
+    -ms-flex-align: center;
+    align-items: center;
+    height: 60px;
+    position: -webkit-sticky;
+    position: sticky;
+    top: 0;
+    z-index: 999;
+    -webkit-box-shadow: 0px 2px 5px 0px rgba(0, 0, 0, 0.1);
+    -moz-box-shadow: 0px 2px 5px 0px rgba(0, 0, 0, 0.1);
+    box-shadow: 0px 2px 5px 0px rgba(0, 0, 0, 0.1);
+}
+
+.au-breadcrumb2 {
+    padding-top: 8px;
+    padding-bottom: 8px;
+}
+
+.statistic-chart-1-note .big {
+    font-size: 18px;
+    color: #393939;
+    text-align: right;
+}
+
+.page-content--bgf7 {
+    background: #f7f7f7;
+    min-height: 100vh;
+}
+
+#login-loading{
+    display: none;
+}
+
+@media (max-width: 1570px) and (min-width: 992px){
+    .header__navbar ul li a {
+        padding: 25px;
+    }
+}

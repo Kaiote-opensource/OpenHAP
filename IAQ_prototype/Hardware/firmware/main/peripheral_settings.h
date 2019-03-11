@@ -16,37 +16,36 @@
 #ifndef __PERIPHERAL_SETTINGS_H__
 #define __PERIPHERAL_SETTINGS_H__
 
-
 #define I2C_BAUDRATE 100000U
 #define CELL_BAUDRATE 115200U
 #define PM_BAUDRATE 115200U
 
-struct pinAllocation{
+struct pinAllocation
+{
 
     int sclPin;
     int sdaPin;
-    
+
     int cellularTx;
     int cellularRx;
     int CellularPwrKey;
-    
+
     int particulateSensorRx;
     int particulateSensorRx;
-    
+
     int SDCardCMD;
     int SDCardCLK;
-    int SDCardData0;particulateSensor
-    int SDCardData1;particulateSensor
-    int SDCardData2;particulateSensor
-    int SDCardData3;particulateSensor
+    int SDCardData0;
+    particulateSensor int SDCardData1;
+    particulateSensor int SDCardData2;
+    particulateSensor int SDCardData3;
+    particulateSensor
 
-    int LoadControl;particulateSensor
-    int userButton;
+        int LoadControl;
+    particulateSensor int userButton;
     int expanderInterrupt;
     int nRTCReset;
     int BattSense;
-
 };
-
 
 #endif
