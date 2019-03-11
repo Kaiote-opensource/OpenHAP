@@ -1,0 +1,3 @@
+[submodule "IAQ_prototype/Hardware/firmware/components/libesphttpd"]
+	path = IAQ_prototype/Hardware/firmware/components/libesphttpd
+	url = https://github.com/chmorgan/libesphttpd.git
