@@ -69,7 +69,7 @@
                                     </li>
                                 </ul>
                             </li> -->
-                            <li >
+                            <li>
                                 <a onclick="helpers.redirect('home')">
                                     <span class="bot-line"></span>Main</a>
                             </li>
@@ -127,7 +127,8 @@
                         <div class="account-wrap">
                             <div class="account-item account-item--style2 clearfix js-item-menu">
                                 <div class="content">
-                                    <button class="btn btn-warning" onclick="_kaiote_handler.logout()">logout</button>
+                                    <button class="btn btn-rounded btn-default"
+                                        onclick="_kaiote_handler.logout()">logout</button>
                                 </div>
                             </div>
                         </div>
@@ -412,19 +413,37 @@
                         <div class="col-md-12">
                             <!-- CHART-->
                             <div class="statistic-chart-1">
-                                <h3 class="title-3 m-b-30">Device Information</h3>
+                                <h3 class="title-3 m-b-30">Settings</h3>
 
                                 <div class="statistic-chart-1-note">
                                     <div class="row">
                                         <div class="col-md-6">
 
                                             <div class="row">
-                                                <span class="big col-md-6">PM 2.5</span>
-                                                <span class="col-md-6"> 20μg/m3</span>
+                                                <span class="big col-md-6">Name</span>
+                                                <span class="col-md-6">
+                                                    <div class="form-group">
+                                                        <input type="text" class="form-control" id="exampleInputEmail1"
+                                                            aria-describedby="emailHelp" placeholder=""
+                                                            value="IAQ-Monitor" name="">
+
+                                                    </div>
+                                                </span>
                                             </div>
                                             <div class="row">
-                                                <span class="big col-md-6">Main Battery</span>
-                                                <span class="col-md-6"> 50 % </span>
+                                                <span class="big col-md-6">Time Zone</span>
+                                                <span class="col-md-6">
+                                                    <div class="form-group">
+                                                        <select value="EST" class="form-control"
+                                                            id="exampleFormControlSelect1">
+                                                            <option>UTC</option>
+                                                            <option>UTC</option>
+                                                            <option>UTC</option>
+                                                            <option>EST</option>
+                                                            <option>UTC</option>
+                                                        </select>
+                                                    </div>
+                                                </span>
                                             </div>
                                             <div class="row">
                                                 <span class="big col-md-6">Humidity</span>

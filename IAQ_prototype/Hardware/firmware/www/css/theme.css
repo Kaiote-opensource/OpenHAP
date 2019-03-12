@@ -2680,7 +2680,7 @@ section {
 .header__navbar ul li a {
     display: block;
     font-size: 16px;
-    color: #ccc;
+    color: rgb(255, 255, 255);
     padding: 25px 30px;
     border-left: 1px solid rgba(255, 255, 255, 0.102);
 }

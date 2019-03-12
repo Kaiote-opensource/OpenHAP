@@ -34,7 +34,7 @@ var helpers = {
     window.location.replace(urls[page])
   },
   log(data) {
-    if (LOG == true) {
+    if (LOG) {
       console.log(data)
     }
 
@@ -67,8 +67,10 @@ var socket = {
 
 }
 
+
+
 /**
- * Web socket hanling methods
+ * Web socket handling methods
  */
 websocketInst.onopen = function (evt) {
   socket.onOpen(evt)

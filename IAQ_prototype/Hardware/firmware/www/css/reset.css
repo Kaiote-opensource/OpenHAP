@@ -1,5 +1,5 @@
 .header-desktop3 {
-    background: #4e4c4c;
+    background: #ffffff;
     display: -webkit-box;
     display: -webkit-flex;
     display: -moz-box;
@@ -40,8 +40,27 @@
     display: none;
 }
 
+.header__navbar ul li a {
+    display: block;
+    font-size: 16px;
+    color: #ffffff;
+    padding: 25px 30px;
+    border-left: 1px solid rgba(255, 255, 255, 0.09);
+}
+ 
+.btn-rounded{
+    border-radius: 20px;
+    padding: 5px 25px;
+}
+
+.btn-default{
+    color:#ffffff;
+    background: rgba(36, 35, 35, 0.808);
+}
+
 @media (max-width: 1570px) and (min-width: 992px){
     .header__navbar ul li a {
-        padding: 25px;
+        padding: 35px 25px 16px 25px;
+        font-weight: 600;
     }
 }
