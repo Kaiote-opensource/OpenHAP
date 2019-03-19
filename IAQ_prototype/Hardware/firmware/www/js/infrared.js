@@ -1,7 +1,4 @@
 const SOCKET_URL = "ws://192.168.4.1:80/infrared.cgi";
-const LOG = true
-
-
 
 /***
  * Socket Management Library
@@ -22,8 +19,6 @@ var socket = {
         var response = JSON.parse(evt)
         socket_responses.imaging(response.IMAGE);
         helpers.log(evt)
-
-
     },
     onError: function (evt) {
         helpers.log(evt)

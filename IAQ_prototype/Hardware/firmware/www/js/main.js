@@ -1,6 +1,3 @@
-
-
-
 var urls = {
   "home": "index.html",
   "login": "index.html",
@@ -9,8 +6,10 @@ var urls = {
   "imaging": "imaging.html"
 }
 
+const LOG = true
 
 var _kaiote_handler = {
+
   /**
    * Handle login on button click
    */
@@ -31,6 +30,7 @@ var helpers = {
   redirect: function (page) {
     window.location.replace(urls[page])
   },
+
   log(data) {
     if (LOG) {
       console.log(data)
