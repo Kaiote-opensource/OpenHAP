@@ -29,7 +29,7 @@ var socket = {
   },
   onMessage: function (evt) {
     helpers.log(evt)
-    document.getElementById("pm25-val").innerHTML = evtPM25 + "μg/m3"
+    document.getElementById("pm25-val").innerHTML = evt.PM25 + "μg/m3"
     document.getElementById("temp-val").innerHTML = evt.TEMP + "C"
     document.getElementById("hum-val").innerHTML = evt.HUM + ""
   },
