@@ -6,6 +6,19 @@ const SOCKET_URL = "ws://192.168.4.1:80/status.cgi";
  */
 var websocketInst = new WebSocket(SOCKET_URL);
 
+
+
+var socket_responses = {
+  populate: function (responses) {
+    document.getElementById("pm25-val").innerHTML = responses.PM25 + "μg/m3"
+    document.getElementById("temp-val").innerHTML = responses.TEMP + "C"
+    document.getElementById("hum-val").innerHTML = responses.HUM + ""
+    document.getElementById("main-bat-val").innerHTML = responses.MAIN_BATT + ""
+    document.getElementById("sd-card-val").innerHTML = responses.SD_CARD + ""
+  }
+}
+
+
 var socket = {
   init: function () {
 
@@ -19,11 +32,7 @@ var socket = {
   onMessage: function (evt) {
     helpers.log(evt)
     var responses = JSON.parse(evt)
-    document.getElementById("pm25-val").innerHTML = responses.PM25 + "μg/m3"
-    document.getElementById("temp-val").innerHTML = responses.TEMP + "C"
-    document.getElementById("hum-val").innerHTML = responses.HUM + ""
-    document.getElementById("main-bat-val").innerHTML = responses.MAIN_BATT + ""
-    document.getElementById("sd-card-val").innerHTML = responses.SD_CARD + ""
+    socket_responses.populate(responses)
   },
   onError: function (evt) {
     helpers.log(evt)
@@ -34,6 +43,7 @@ var socket = {
     }))
   }
 }
+
 
 
 /**

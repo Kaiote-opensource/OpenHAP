@@ -1,4 +1,4 @@
-const SOCKET_URL = "ws://192.168.4.1:80/infrared.cgi";
+const SOCKET_URL = "ws://192.168.4.1:80/infared.cgi";
 
 /***
  * Socket Management Library
@@ -29,7 +29,6 @@ var socket = {
 
 var socket_responses = {
     imaging: function (image) {
-        // infrared-image
         document.getElementById("infrared-image").src = "data:image/png;base64," + image;
     }
 }

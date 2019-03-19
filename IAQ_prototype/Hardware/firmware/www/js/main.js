@@ -9,7 +9,6 @@ var urls = {
 const LOG = true
 
 var _kaiote_handler = {
-
   /**
    * Handle login on button click
    */
