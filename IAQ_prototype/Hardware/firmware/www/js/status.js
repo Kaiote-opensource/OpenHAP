@@ -1,17 +1,9 @@
-const SOCKET_URL = "ws://192.168.4.1:80/status.cgi";
+// const SOCKET_URL = "ws://192.168.4.1:80/status.cgi";
+const SOCKET_URL = "ws://localhost:8999";
+
 const LOG = true
 
-var sample = {
-  "HUM": 67,
-  "TEMP": 99,
-  "PM2.5": 8,
-  "TIME": 19,
-  "RTC_BATT": 10,
-  "MAIN BATT_BATT": 68,
-  "SD CARD": "DISCONNECTED"
-}
-
-console.log(JSON.parse(sample))
+// console.log(JSON.parse(sample))
 /***
  * Socket Management Library
  */
@@ -29,6 +21,8 @@ var socket = {
   },
   onMessage: function (evt) {
     helpers.log(evt)
+    console.log(JSON.stringify(evt))
+    console.log(JSON.parse(JSON.stringify(evt)).TEMP)
     var responses = JSON.parse(evt)
     document.getElementById("pm25-val").innerHTML = responses.PM25 + "μg/m3"
     document.getElementById("temp-val").innerHTML = responses.TEMP + "C"
