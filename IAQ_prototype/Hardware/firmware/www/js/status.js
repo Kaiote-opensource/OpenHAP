@@ -11,7 +11,7 @@ var sample = {
   "SD CARD": "DISCONNECTED"
 }
 
-
+console.log(JSON.parse(sample))
 /***
  * Socket Management Library
  */
@@ -29,19 +29,20 @@ var socket = {
   },
   onMessage: function (evt) {
     helpers.log(evt)
-    document.getElementById("pm25-val").innerHTML = evt["PM25"] + "μg/m3"
-    document.getElementById("temp-val").innerHTML = evt["TEMP"] + "C"
-    document.getElementById("hum-val").innerHTML = evt["HUM"] + ""
-    document.getElementById("main-bat-val").innerHTML = evt["MAIN_BATT"] + ""
-    document.getElementById("sd-card-val").innerHTML = evt["SD_CARD"] + ""
+    var responses = JSON.parse(evt)
+    document.getElementById("pm25-val").innerHTML = responses.PM25 + "μg/m3"
+    document.getElementById("temp-val").innerHTML = responses.TEMP + "C"
+    document.getElementById("hum-val").innerHTML = responses.HUM + ""
+    document.getElementById("main-bat-val").innerHTML = responses.MAIN_BATT + ""
+    document.getElementById("sd-card-val").innerHTML = responses.SD_CARD + ""
   },
   onError: function (evt) {
     helpers.log(evt)
   },
   startMeasuring: function () {
-    websocketInst.send({
+    websocketInst.send(JSON.stringify({
       MEASUREMENT: true
-    })
+    }))
   }
 
 
