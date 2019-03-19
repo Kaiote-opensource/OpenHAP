@@ -1,4 +1,4 @@
-const SOCKET_URL = "ws://192.168.4.1:80";
+const SOCKET_URL = "ws://192.168.4.1:80/status.cgi";
 const LOG = true
 
 var sample = {
@@ -29,8 +29,7 @@ var socket = {
   },
   onMessage: function (evt) {
     helpers.log(evt)
-
-    document.getElementById("pm25-val").innerHTML = evt["PM2.5"] + "μg/m3"
+    document.getElementById("pm25-val").innerHTML = evtPM25 + "μg/m3"
     document.getElementById("temp-val").innerHTML = evt.TEMP + "C"
     document.getElementById("hum-val").innerHTML = evt.HUM + ""
   },

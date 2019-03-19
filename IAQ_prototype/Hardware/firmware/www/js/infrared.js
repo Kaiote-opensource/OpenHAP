@@ -1,4 +1,4 @@
-const SOCKET_URL = "ws://192.168.4.1:80";
+const SOCKET_URL = "ws://192.168.4.1:80/infrared.cgi";
 const LOG = true
 
 
@@ -19,11 +19,11 @@ var socket = {
         helpers.log(evt)
     },
     onMessage: function (evt) {
-        if(evt.IMAGE){
-           socket_responses.imaging(evt.IMAGE);
+        if (evt.IMAGE) {
+            socket_responses.imaging(evt.IMAGE);
         }
         helpers.log(evt)
-        
+
 
     },
     onError: function (evt) {
@@ -49,7 +49,7 @@ websocketInst.onopen = function (evt) {
 
 websocketInst.onmessage = function (evt) {
     socket.onMessage(evt.data)
-    
+
 };
 websocketInst.onerror = function (evt) {
     socket.onError(evt)
