@@ -12,12 +12,12 @@
     <!-- Title Page-->
     <title>IAQ</title>
 
-    
+
 
     <!-- Bootstrap CSS-->
     <link href="vendor/bootstrap-4.1/bootstrap.min.css" rel="stylesheet" media="all">
 
-   
+
     <!-- Main CSS-->
     <link href="css/theme.css" rel="stylesheet" media="all">
     <link href="css/reset.css" rel="stylesheet" media="all">
@@ -37,7 +37,7 @@
                     </div>
                     <div class="header__navbar">
                         <ul class="list-unstyled">
-                           
+
                             <li class="active">
                                 <a onclick="helpers.redirect('home')">
                                     <span class="bot-line"></span>Main</a>
@@ -386,7 +386,19 @@
                         <div class="col-md-12">
                             <!-- CHART-->
                             <div class="statistic-chart-1">
-                                <h3 class="title-3 m-b-30">Device Information</h3>
+                                <div class="row">
+                                    <div class="col-md-3">
+                                        <h3 class="title-3 m-b-30">Device Information</h3>
+                                    </div>
+                                    <div class="col-md-6">
+
+                                    </div>
+                                    <div class="col-md-3">
+                                        <button class="btn btn-rounded btn-success"
+                                            onclick="socket.startMeasuring()">Start Measurement</button>
+                                    </div>
+                                </div>
+
 
                                 <div class="statistic-chart-1-note">
                                     <div class="row">
@@ -394,7 +406,7 @@
 
                                             <div class="row">
                                                 <span class="big col-md-6">PM 2.5</span>
-                                                <span class="col-md-6"> 20μg/m3</span>
+                                                <span class="col-md-6" id="pm25-val"> </span>
                                             </div>
                                             <div class="row">
                                                 <span class="big col-md-6">Main Battery</span>
@@ -402,13 +414,18 @@
                                             </div>
                                             <div class="row">
                                                 <span class="big col-md-6">Humidity</span>
-                                                <span class="col-md-6">x</span>
+                                                <span class="col-md-6" id="hum-val"></span>
+                                            </div>
+                                            <div class="row">
+                                                <span class="big col-md-6">Temperature</span>
+                                                <span class="col-md-6" id="temp-val"></span>
                                             </div>
 
 
                                         </div>
 
                                         <div class="col-md-6">
+
                                             <!-- <span class="big">10,368</span>
                                             <span>/ 16220 items sold</span> -->
                                         </div>
@@ -420,7 +437,7 @@
 
 
                     </div>
-                    
+
                 </div>
             </section>
             <!-- END STATISTIC CHART-->
