@@ -19,9 +19,8 @@ var socket = {
         helpers.log(evt)
     },
     onMessage: function (evt) {
-        if (evt.IMAGE) {
-            socket_responses.imaging(evt["IMAGE"]);
-        }
+        var response = JSON.parse(evt)
+        socket_responses.imaging(response.IMAGE);
         helpers.log(evt)
 
 
