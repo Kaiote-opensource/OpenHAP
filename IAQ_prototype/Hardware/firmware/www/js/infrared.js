@@ -20,7 +20,7 @@ var socket = {
     },
     onMessage: function (evt) {
         if (evt.IMAGE) {
-            socket_responses.imaging(evt.IMAGE);
+            socket_responses.imaging(evt["IMAGE"]);
         }
         helpers.log(evt)
 

@@ -29,9 +29,11 @@ var socket = {
   },
   onMessage: function (evt) {
     helpers.log(evt)
-    document.getElementById("pm25-val").innerHTML = evt.PM25 + "μg/m3"
-    document.getElementById("temp-val").innerHTML = evt.TEMP + "C"
-    document.getElementById("hum-val").innerHTML = evt.HUM + ""
+    document.getElementById("pm25-val").innerHTML = evt["PM25"] + "μg/m3"
+    document.getElementById("temp-val").innerHTML = evt["TEMP"] + "C"
+    document.getElementById("hum-val").innerHTML = evt["HUM"] + ""
+    document.getElementById("main-bat-val").innerHTML = evt["MAIN_BATT"] + ""
+    document.getElementById("sd-card-val").innerHTML = evt["SD_CARD"] + ""
   },
   onError: function (evt) {
     helpers.log(evt)
