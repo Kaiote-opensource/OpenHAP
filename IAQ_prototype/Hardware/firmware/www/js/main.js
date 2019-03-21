@@ -8,6 +8,21 @@ var urls = {
 
 const LOG = true
 
+/**
+ * Toggle Mobile Menu
+ */
+function openMenu() {
+
+  if (document.getElementById("mobile-menu").style.display == "none") {
+
+    document.getElementById("mobile-menu").style.display = "block";
+  } else {
+    document.getElementById("mobile-menu").style.display = "none";
+  }
+
+}
+
+
 var _kaiote_handler = {
   /**
    * Handle login on button click
@@ -25,17 +40,36 @@ var _kaiote_handler = {
 
 }
 
+/***
+ * 
+ * Manage Storage On the 
+ */
+var storage = {
+  set: function (key, data) {
+    localStorage.setItem(key, JSON.stringify(data));
+  },
+  remove: function () { },
+  update: function () { },
+}
+
+
+
+
+
+// ** Update data section (Called from the onclick)
+
+
 var helpers = {
   redirect: function (page) {
     window.location.replace(urls[page])
   },
 
-  log(data) {
+  log: function (data) {
     if (LOG) {
       console.log(data)
     }
+  },
 
-  }
 }
 
 

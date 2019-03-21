@@ -36,7 +36,7 @@
     min-height: 100vh;
 }
 
-#login-loading{
+#login-loading {
     display: none;
 }
 
@@ -47,18 +47,38 @@
     padding: 25px 30px;
     border-left: 1px solid rgba(255, 255, 255, 0.09);
 }
- 
-.btn-rounded{
+
+.btn-rounded {
     border-radius: 20px;
     padding: 5px 25px;
 }
 
-.btn-default{
-    color:#ffffff;
+.btn-default {
+    color: #ffffff;
     background: rgba(36, 35, 35, 0.808);
 }
 
-@media (max-width: 1570px) and (min-width: 992px){
+.line {
+    fill: none;
+    stroke: steelblue;
+    stroke-width: 3px;
+}
+
+.grid line {
+    stroke: rgb(228, 223, 223);
+    stroke-opacity: 0.7;
+    shape-rendering: crispEdges;
+}
+
+.grid path {
+    stroke-width: 0;
+}
+
+.modebar {
+    display: none !important;
+}
+
+@media (max-width: 1570px) and (min-width: 992px) {
     .header__navbar ul li a {
         padding: 35px 25px 16px 25px;
         font-weight: 600;
