@@ -1,6 +1,7 @@
 const SOCKET_URL = "ws://192.168.4.1:80/status.cgi";
 // const SOCKET_URL = "ws://localhost:8999";
 
+// _kaiote_handler.toast()
 /***
  * Socket Management Library
  */
@@ -105,9 +106,17 @@ var socket = {
     helpers.log(evt)
   },
   startMeasuring: function () {
+
     websocketInst.send(JSON.stringify({
       MEASUREMENT: 1
     }))
+
+    _kaiote_handler.toast({
+      type: "success",
+      duration: 5000,
+      message: "success"
+    })
+
   }
 }
 
