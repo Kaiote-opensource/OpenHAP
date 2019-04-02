@@ -1,7 +1,7 @@
 var urls = {
   "home": "index.html",
   "login": "index.html",
-  "advanced":"advanced.html",
+  "advanced": "advanced.html",
   "system": "system.html",
   "imaging": "imaging.html"
 }
@@ -43,7 +43,7 @@ var _kaiote_handler = {
     // socket.name
   },
   toast: function (options = this._toast_options) {
-
+    _kaiote_handler.show("graph-loader")
     if (options.type == "success") {
       document.body.innerHTML += '<div id="toasting" class="toast toast-success">' +
         '<p>' + options.message + '</p>' +
@@ -56,15 +56,25 @@ var _kaiote_handler = {
         '</div>';
     }
 
-
-
     setTimeout(function () {
       var elem = document.querySelector('#toasting');
       elem.parentNode.removeChild(elem);
+      _kaiote_handler.hide("graph-loader")
     }, options.duration)
 
 
   },
+  show: function (name) {
+    document.getElementById(name).style.display = "inline";
+  },
+  hide: function (name) {
+    document.getElementById(name).style.display = "none";
+  },
+  playSound: function () {
+    var audio = new Audio('./resources/beep4.mp3');
+    audio.play();
+  }
+
 
 }
 
@@ -81,12 +91,7 @@ var storage = {
 }
 
 
-
-
-
 // ** Update data section (Called from the onclick)
-
-
 var helpers = {
   redirect: function (page) {
     window.location.replace(urls[page])

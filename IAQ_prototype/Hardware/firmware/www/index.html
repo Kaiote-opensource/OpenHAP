@@ -37,7 +37,7 @@
                 <div class="header3-wrap">
                     <div class="header__logo">
                         <a onclick="helpers.redirect('home')">
-                            <img src="https://kaiote.io/kaiote/kaiote-logo.svg" style="width: 120px;" alt="CoolAdmin" />
+                            <img src="./resources/kaiote-logo.svg" style="width: 120px;" alt="CoolAdmin" />
                         </a>
                     </div>
                     <div class="header__navbar">
@@ -121,7 +121,7 @@
             <div class="header-mobile__bar">
                 <div class="container-fluid">
                     <div class="header-mobile-inner">
-                        <button onclick="openMenu()" class="btn btn-danger" type="button">
+                        <button onclick="openMenu()" class="btn btn-success" type="button">
                             Menu
                         </button>
                     </div>
@@ -235,16 +235,16 @@
                         <div class="col-md-12">
                             <div class="au-breadcrumb-content">
                                 <div class="au-breadcrumb-left">
-                                    <span class="au-breadcrumb-span">>></span>
+                                    <!-- <span class="au-breadcrumb-span">>></span>
                                     <ul class="list-unstyled list-inline au-breadcrumb__list">
                                         <li class="list-inline-item active">
                                             <a href="#">Main</a>
                                         </li>
-                                        <!-- <li class="list-inline-item seprate">
+                                        <li class="list-inline-item seprate">
                                             <span>/</span>
                                         </li>
-                                        <li class="list-inline-item">Dashboard</li> -->
-                                    </ul>
+                                        <li class="list-inline-item">Dashboard</li>
+                                    </ul> -->
                                 </div>
 
                             </div>
@@ -278,10 +278,10 @@
 
                                 <div class="statistic-chart-1-note">
                                     <div class="row">
-                                        <div class="col-md-6">
-                                            <div class="row">
+                                        <div class="col-md-4">
+                                            <div class="row statistic-k">
                                                 <span class="big col-md-6">Main Battery</span>
-                                                <span class="col-md-6" id="main-bat-val"> </span>
+                                                <span class="col-md-6" id="main-bat-val"></span>
                                             </div>
                                             <!-- <div class="row">
                                                 <span class="big col-md-6">PM 2.5</span>
@@ -298,9 +298,9 @@
                                             </div> -->
 
 
-                                            <div class="row">
+                                            <div class="row statistic-k">
                                                 <span class="big col-md-6">SD Card</span>
-                                                <span class="col-md-6" id="sd-card-val"></span>
+                                                <span class="col-md-6" id="sd-card-val" class="badge"></span>
                                             </div>
 
 
@@ -308,8 +308,12 @@
 
 
                                         </div>
+                                        <div class="col-md-4">
 
-                                        <div class="col-md-6">
+                                            <!-- <span class="big">10,368</span>
+                                            <span>/ 16220 items sold</span> -->
+                                        </div>
+                                        <div class="col-md-4">
 
                                             <!-- <span class="big">10,368</span>
                                             <span>/ 16220 items sold</span> -->
@@ -326,6 +330,15 @@
                 </div>
             </section>
             <!-- END STATISTIC CHART-->
+            <center>
+                <div class="lds-css ng-scope" id="graph-loader">
+                    <div style="width:60px;height:60px;" class="lds-dual-ring">
+                        <div></div>
+                    </div>
+                    <style type="text/css">
+                    </style>
+                </div>
+            </center>
             <section class="p-t-60 p-b-20">
                 <div class="container">
                     <div class="row">

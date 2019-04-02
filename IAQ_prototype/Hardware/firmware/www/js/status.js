@@ -53,6 +53,13 @@ var graphs = {
       displayModeBar: false,
     }, { showSendToCloud: false });
   },
+  keepUnderMin: function (data, threshold) {
+    if (data.x.length > threshold) {
+      data.x.shift()
+      data.y.shift()
+    }
+    return data
+  },
 
 }
 
@@ -67,8 +74,17 @@ var socket_responses = {
     // document.getElementById("pm25-val").innerHTML = responses.PM25 + "μg/m3"
     // document.getElementById("temp-val").innerHTML = responses.TEMP + "C"
     // document.getElementById("hum-val").innerHTML = responses.HUM + ""
-    document.getElementById("main-bat-val").innerHTML = responses.MAIN_BATT + ""
+    document.getElementById("main-bat-val").innerHTML = '<div class="progress" style="width:100%;">' +
+      '<div class="progress-bar bg-success" role="progressbar" style="width: ' + responses.MAIN_BATT + '%" aria-valuenow="' + responses.MAIN_BATT + '" aria-valuemin="0" aria-valuemax="100"></div>' +
+      '</div>';
+
     document.getElementById("sd-card-val").innerHTML = responses.SD_CARD + ""
+
+    if (responses.SD_CARD == "DISCONNECTED") {
+      document.getElementById("sd-card-val").style = "background-color:red; border-radius:5px; color:#ffffff; width:80%";
+    } else {
+      document.getElementById("sd-card-val").style = "background-color:green; border-radius:5px; color:#ffffff;width:80%";
+    }
 
     var today = new Date();
     var time = today.getHours() + ":" + today.getMinutes() + ":" + today.getSeconds();
@@ -82,7 +98,17 @@ var socket_responses = {
     pm25_data.x.push(time)
     pm25_data.y.push(responses.PM25)
 
-    graphs.load()
+    tempe_data = graphs.keepUnderMin(tempe_data, 15)
+    humidity_data = graphs.keepUnderMin(humidity_data, 15)
+    pm25_data = graphs.keepUnderMin(pm25_data, 15)
+    if (tempe_data.x.length <= 0) {
+      _kaiote_handler.show("graph-loader")
+    }
+    if (tempe_data.x.length >= 5) {
+      _kaiote_handler.playSound()
+      _kaiote_handler.hide("graph-loader")
+      graphs.load()
+    }
   }
 }
 
@@ -116,6 +142,7 @@ var socket = {
       duration: 5000,
       message: "success"
     })
+
 
   }
 }
