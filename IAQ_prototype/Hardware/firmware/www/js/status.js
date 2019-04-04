@@ -33,22 +33,49 @@ var graphs = {
     var Pdata = [pm25_data]
 
     Plotly.newPlot('temp-graph', Tdata, {
+      width: 400,
+      height: 350,
       xaxis: {
-        title: 'Temperature'
+        autorange: true,
+        showgrid: false,
+        zeroline: false,
+        showline: false,
+        autotick: true,
+        ticks: '',
+        showticklabels: false,
+        fixedrange: true
       },
       displayModeBar: false,
     }, { showSendToCloud: false });
 
     Plotly.newPlot('humidity-graph', Hdata, {
+      width: 400,
+      height: 350,
       xaxis: {
-        title: 'Humidity'
+        autorange: true,
+        showgrid: false,
+        zeroline: false,
+        showline: false,
+        autotick: true,
+        ticks: '',
+        showticklabels: false,
+        fixedrange: true
       },
       displayModeBar: false,
     }, { showSendToCloud: false });
 
     Plotly.newPlot('pm25-graph', Pdata, {
+      width: 400,
+      height: 350,
       xaxis: {
-        title: 'Particulate Matter'
+        autorange: true,
+        showgrid: false,
+        zeroline: false,
+        showline: false,
+        autotick: true,
+        ticks: '',
+        showticklabels: false,
+        fixedrange: true
       },
       displayModeBar: false,
     }, { showSendToCloud: false });
@@ -74,16 +101,27 @@ var socket_responses = {
     // document.getElementById("pm25-val").innerHTML = responses.PM25 + "μg/m3"
     // document.getElementById("temp-val").innerHTML = responses.TEMP + "C"
     // document.getElementById("hum-val").innerHTML = responses.HUM + ""
-    document.getElementById("main-bat-val").innerHTML = '<div class="progress" style="width:100%;">' +
-      '<div class="progress-bar bg-success" role="progressbar" style="width: ' + responses.MAIN_BATT + '%" aria-valuenow="' + responses.MAIN_BATT + '" aria-valuemin="0" aria-valuemax="100"></div>' +
-      '</div>';
+
+    if (responses.MAIN_BATT > 2.7) {
+      document.getElementById("main-bat-val").innerHTML = '<div class="progress" style="width:100%;">' +
+        '<div class="progress-bar bg-success" role="progressbar" style="width: ' + ((responses.MAIN_BATT / 3.3) * 100) + '%" aria-valuenow="' + responses.MAIN_BATT + '" aria-valuemin="0" aria-valuemax="3.3">' + responses.MAIN_BATT + '</div>' +
+        '</div>';
+    } else if (responses.MAIN_BATT <= 2.4) {
+      document.getElementById("main-bat-val").innerHTML = '<div class="progress" style="width:100%;">' +
+        '<div class="progress-bar bg-danger" role="progressbar" style="width: ' + ((responses.MAIN_BATT / 3.3) * 100) + '%" aria-valuenow="' + responses.MAIN_BATT + '" aria-valuemin="0" aria-valuemax="3.3">' + responses.MAIN_BATT + '</div>' +
+        '</div>';
+    } else {
+      document.getElementById("main-bat-val").innerHTML = '<div class="progress" style="width:100%;">' +
+        '<div class="progress-bar bg-warning" role="progressbar" style="width: ' + ((responses.MAIN_BATT / 3.3) * 100) + '%" aria-valuenow="' + responses.MAIN_BATT + '" aria-valuemin="0" aria-valuemax="3.3">' + responses.MAIN_BATT + '</div>' +
+        '</div>';
+    }
 
     document.getElementById("sd-card-val").innerHTML = responses.SD_CARD + ""
 
     if (responses.SD_CARD == "DISCONNECTED") {
-      document.getElementById("sd-card-val").style = "background-color:red; border-radius:5px; color:#ffffff; width:80%";
+      document.getElementById("sd-card-val").innerHTML = '<button type="button" class="btn btn-danger">DISCONNECTED</button>';
     } else {
-      document.getElementById("sd-card-val").style = "background-color:green; border-radius:5px; color:#ffffff;width:80%";
+      document.getElementById("sd-card-val").innerHTML = '<button type="button" class="btn btn-success">CONNECTED</button>';
     }
 
     var today = new Date();

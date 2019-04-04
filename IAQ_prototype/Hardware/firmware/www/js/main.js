@@ -72,6 +72,7 @@ var _kaiote_handler = {
   },
   playSound: function () {
     var audio = new Audio('./resources/beep4.mp3');
+    // audio.playbackRate = 4.0
     audio.play();
   }
 
