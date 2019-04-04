@@ -74,6 +74,10 @@ var _kaiote_handler = {
     var audio = new Audio('./resources/beep4.mp3');
     // audio.playbackRate = 4.0
     audio.play();
+  },
+  currentTime: function () {
+    var date = new Date();
+    return date.getTime() / 1000 | 0
   }
 
 

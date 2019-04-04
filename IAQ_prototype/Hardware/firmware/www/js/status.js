@@ -177,8 +177,16 @@ var socket = {
       duration: 5000,
       message: "success"
     })
-
-
+  },
+  sendTime() {
+    websocketInst.send(JSON.stringify({
+      UNIX_TIME: _kaiote_handler.currentTime()
+    }))
+    _kaiote_handler.toast({
+      type: "success",
+      duration: 5000,
+      message: "success : Time Set"
+    })
   }
 }
 
