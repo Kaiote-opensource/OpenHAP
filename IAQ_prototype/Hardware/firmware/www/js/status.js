@@ -1,7 +1,6 @@
 const SOCKET_URL = "ws://192.168.4.1:80/status.cgi";
 // const SOCKET_URL = "ws://localhost:8999";
 
-// _kaiote_handler.toast()
 /***
  * Socket Management Library
  */
@@ -90,8 +89,6 @@ var graphs = {
 
 }
 
-
-// graphs.temperature()
 
 /**
  * Populate values on the required DOM Elements
