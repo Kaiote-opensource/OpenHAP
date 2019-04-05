@@ -22,7 +22,6 @@ function openMenu() {
 
 }
 
-
 var _kaiote_handler = {
   /**
    * Handle login on button click
@@ -72,12 +71,35 @@ var _kaiote_handler = {
   },
   playSound: function () {
     var audio = new Audio('./resources/beep4.mp3');
-    // audio.playbackRate = 4.0
     audio.play();
   },
   currentTime: function () {
     var date = new Date();
     return date.getTime() / 1000 | 0
+  },
+  loadTimeFromUnixTime: function (UNIX_timestamp) {
+    var a = new Date(UNIX_timestamp * 1000);
+    var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    var year = a.getFullYear();
+    var month = months[a.getMonth()];
+    var date = a.getDate();
+    var hour = a.getHours();
+    var min = a.getMinutes();
+    var sec = a.getSeconds();
+    var time = hour + ':' + min + ':' + sec;
+    return time;
+  },
+  uuidv4: function () {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+      var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  },
+  getTimeDifference: function (t1, t2) {
+    var a = new Date(t1 * 1000);
+    var b = new Date(t2 * 1000);
+    var diff = (a.getTime() - b.getTime()) / 1000;
+    return Math.abs(diff);
   }
 
 

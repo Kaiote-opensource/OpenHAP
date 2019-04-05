@@ -5,6 +5,8 @@ const SOCKET_URL = "ws://192.168.4.1:80/status.cgi";
  * Socket Management Library
  */
 var websocketInst = new WebSocket(SOCKET_URL);
+
+var device_time;
 var tempe_data = {
   x: [],
   y: [],
@@ -94,31 +96,92 @@ var graphs = {
  * Populate values on the required DOM Elements
  */
 var socket_responses = {
+  socketResponses: function (responses) {
+    /***
+     * Start Measurement Response
+     */
+    try {
+      if ('SET_TIME' in responses) {
+        _kaiote_handler.toast({
+          type: "success",
+          duration: 2000,
+          message: "Time Set"
+        })
+
+      }
+
+      /**
+       * Start Measurement Response
+       */
+      if ('START_MEASUREMENT' in responses) {
+        _kaiote_handler.toast({
+          type: "success",
+          duration: 2000,
+          message: "Success"
+        })
+
+      }
+    } catch (error) {
+
+    }
+  },
   populate: function (responses) {
     // document.getElementById("pm25-val").innerHTML = responses.PM25 + "μg/m3"
     // document.getElementById("temp-val").innerHTML = responses.TEMP + "C"
     // document.getElementById("hum-val").innerHTML = responses.HUM + ""
 
-    if (responses.MAIN_BATT > 2.7) {
+    if (responses.RTC_BATT > 2.7) {
+
       document.getElementById("main-bat-val").innerHTML = '<div class="progress" style="width:100%;">' +
-        '<div class="progress-bar bg-success" role="progressbar" style="width: ' + ((responses.MAIN_BATT / 3.3) * 100) + '%" aria-valuenow="' + responses.MAIN_BATT + '" aria-valuemin="0" aria-valuemax="3.3">' + responses.MAIN_BATT + '</div>' +
+        '<div class="progress-bar bg-success" role="progressbar" style="width: '
+        + ((responses.RTC_BATT / 3.3) * 100) +
+        '%" aria-valuenow="' + responses.RTC_BATT +
+        '" aria-valuemin="0" aria-valuemax="3.3">' +
+        responses.RTC_BATT +
+        '</div>' +
         '</div>';
-    } else if (responses.MAIN_BATT <= 2.4) {
+
+    } else if (responses.RTC_BATT <= 2.4) {
+
       document.getElementById("main-bat-val").innerHTML = '<div class="progress" style="width:100%;">' +
-        '<div class="progress-bar bg-danger" role="progressbar" style="width: ' + ((responses.MAIN_BATT / 3.3) * 100) + '%" aria-valuenow="' + responses.MAIN_BATT + '" aria-valuemin="0" aria-valuemax="3.3">' + responses.MAIN_BATT + '</div>' +
+        '<div class="progress-bar bg-danger" role="progressbar" style="width: ' +
+        ((responses.RTC_BATT / 3.3) * 100) +
+        '%" aria-valuenow="' +
+        responses.RTC_BATT +
+        '" aria-valuemin="0" aria-valuemax="3.3">' +
+        responses.RTC_BATT +
+        '</div>' +
         '</div>';
+
     } else {
+
       document.getElementById("main-bat-val").innerHTML = '<div class="progress" style="width:100%;">' +
-        '<div class="progress-bar bg-warning" role="progressbar" style="width: ' + ((responses.MAIN_BATT / 3.3) * 100) + '%" aria-valuenow="' + responses.MAIN_BATT + '" aria-valuemin="0" aria-valuemax="3.3">' + responses.MAIN_BATT + '</div>' +
+        '<div class="progress-bar bg-warning" role="progressbar" style="width: ' +
+        ((responses.RTC_BATT / 3.3) * 100) +
+        '%" aria-valuenow="' +
+        responses.RTC_BATT +
+        '" aria-valuemin="0" aria-valuemax="3.3">' +
+        responses.RTC_BATT +
+        '</div>' +
         '</div>';
     }
+
+
+
+
+    document.getElementById("device-time").innerHTML = _kaiote_handler.loadTimeFromUnixTime(responses.DEVICE_TIME)
+    device_time = responses.DEVICE_TIME
 
     document.getElementById("sd-card-val").innerHTML = responses.SD_CARD + ""
 
     if (responses.SD_CARD == "DISCONNECTED") {
+
       document.getElementById("sd-card-val").innerHTML = '<button type="button" class="btn btn-danger">DISCONNECTED</button>';
+
     } else {
+
       document.getElementById("sd-card-val").innerHTML = '<button type="button" class="btn btn-success">CONNECTED</button>';
+
     }
 
     var today = new Date();
@@ -136,15 +199,21 @@ var socket_responses = {
     tempe_data = graphs.keepUnderMin(tempe_data, 15)
     humidity_data = graphs.keepUnderMin(humidity_data, 15)
     pm25_data = graphs.keepUnderMin(pm25_data, 15)
+
     if (tempe_data.x.length <= 0) {
       _kaiote_handler.show("graph-loader")
     }
-    if (tempe_data.x.length >= 5) {
+
+
+    if (tempe_data.x.length >= 1) {
       _kaiote_handler.playSound()
       _kaiote_handler.hide("graph-loader")
       graphs.load()
     }
-  }
+
+
+  },
+
 }
 
 
@@ -159,34 +228,40 @@ var socket = {
     helpers.log(evt)
   },
   onMessage: function (evt) {
-    // helpers.log(evt)
     var responses = JSON.parse(evt)
     socket_responses.populate(responses)
+    socket_responses.socketResponses(responses)
   },
   onError: function (evt) {
     helpers.log(evt)
   },
   startMeasuring: function () {
-
-    websocketInst.send(JSON.stringify({
-      MEASUREMENT: 1
-    }))
-
-    _kaiote_handler.toast({
-      type: "success",
-      duration: 5000,
-      message: "success"
-    })
+    var t1 = _kaiote_handler.currentTime()
+    var t2 = device_time
+    var difference = _kaiote_handler.getTimeDifference(t1, t2)
+    // console.log(_kaiote_handler.getTimeDifference(t1, t2))
+    if (difference < 30) {
+      websocketInst.send(JSON.stringify({
+        START_MEASUREMENT: {
+          VALUE: 1,
+          UID: _kaiote_handler.uuidv4()
+        }
+      }))
+    } else {
+      _kaiote_handler.toast({
+        type: "error",
+        duration: 2000,
+        message: "Time error! Failed"
+      })
+    }
   },
   sendTime() {
     websocketInst.send(JSON.stringify({
-      UNIX_TIME: _kaiote_handler.currentTime()
+      SET_TIME: {
+        VALUE: _kaiote_handler.currentTime(),
+        UID: _kaiote_handler.uuidv4()
+      }
     }))
-    _kaiote_handler.toast({
-      type: "success",
-      duration: 5000,
-      message: "success : Time Set"
-    })
   }
 }
 
