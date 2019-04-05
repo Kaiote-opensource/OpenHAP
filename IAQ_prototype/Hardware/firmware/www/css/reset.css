@@ -270,6 +270,11 @@ a:not([href]):not([tabindex]) {
     margin: 15px 0;
 }
 
+.statistic-chart-1-note .big-1 {
+    text-align: left;
+    padding-bottom: 9px;
+}
+
 /***
 *
 *
@@ -289,7 +294,10 @@ a:not([href]):not([tabindex]) {
     .statistic-chart-1-note .big {
         font-size: unset;
         color: #000000;
-        text-align: left;
+        text-align: center;
+    }
+    .statistic-chart-1-note .big-1 {
+        text-align: center;
     }
     .statistic-k {
         border-bottom: solid 1px #e6e2e2;

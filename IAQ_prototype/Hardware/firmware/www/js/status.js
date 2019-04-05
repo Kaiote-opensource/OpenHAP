@@ -34,8 +34,15 @@ var graphs = {
     var Pdata = [pm25_data]
 
     Plotly.newPlot('temp-graph', Tdata, {
-      width: 400,
-      height: 350,
+      // width: 350,
+      height: 330,
+      margin: {
+        l: 45,
+        r: 30,
+        b: 60,
+        t: 60,
+        pad: 20
+      },
       xaxis: {
         autorange: true,
         showgrid: false,
@@ -50,8 +57,15 @@ var graphs = {
     }, { showSendToCloud: false });
 
     Plotly.newPlot('humidity-graph', Hdata, {
-      width: 400,
-      height: 350,
+      height: 330,
+      margin: {
+        l: 45,
+        r: 30,
+        b: 60,
+        t: 60,
+        pad: 20
+      },
+
       xaxis: {
         autorange: true,
         showgrid: false,
@@ -66,8 +80,14 @@ var graphs = {
     }, { showSendToCloud: false });
 
     Plotly.newPlot('pm25-graph', Pdata, {
-      width: 400,
-      height: 350,
+      height: 330,
+      margin: {
+        l: 45,
+        r: 30,
+        b: 60,
+        t: 60,
+        pad: 20
+      },
       xaxis: {
         autorange: true,
         showgrid: false,
@@ -130,26 +150,26 @@ var socket_responses = {
     // document.getElementById("temp-val").innerHTML = responses.TEMP + "C"
     // document.getElementById("hum-val").innerHTML = responses.HUM + ""
 
-    if (responses.RTC_BATT > 2.7) {
+    if (responses.RTC_BATT > 50) {
 
       document.getElementById("main-bat-val").innerHTML = '<div class="progress" style="width:100%;">' +
         '<div class="progress-bar bg-success" role="progressbar" style="width: '
-        + ((responses.RTC_BATT / 3.3) * 100) +
+        + responses.RTC_BATT +
         '%" aria-valuenow="' + responses.RTC_BATT +
-        '" aria-valuemin="0" aria-valuemax="3.3">' +
-        responses.RTC_BATT +
+        '" aria-valuemin="0" aria-valuemax="100">' +
+        responses.RTC_BATT + "%" +
         '</div>' +
         '</div>';
 
-    } else if (responses.RTC_BATT <= 2.4) {
+    } else if (responses.RTC_BATT <= 25) {
 
       document.getElementById("main-bat-val").innerHTML = '<div class="progress" style="width:100%;">' +
         '<div class="progress-bar bg-danger" role="progressbar" style="width: ' +
-        ((responses.RTC_BATT / 3.3) * 100) +
+        responses.RTC_BATT +
         '%" aria-valuenow="' +
         responses.RTC_BATT +
-        '" aria-valuemin="0" aria-valuemax="3.3">' +
-        responses.RTC_BATT +
+        '" aria-valuemin="0" aria-valuemax="100">' +
+        responses.RTC_BATT + "%" +
         '</div>' +
         '</div>';
 
@@ -157,11 +177,11 @@ var socket_responses = {
 
       document.getElementById("main-bat-val").innerHTML = '<div class="progress" style="width:100%;">' +
         '<div class="progress-bar bg-warning" role="progressbar" style="width: ' +
-        ((responses.RTC_BATT / 3.3) * 100) +
+        responses.RTC_BATT +
         '%" aria-valuenow="' +
         responses.RTC_BATT +
-        '" aria-valuemin="0" aria-valuemax="3.3">' +
-        responses.RTC_BATT +
+        '" aria-valuemin="0" aria-valuemax="100">' +
+        responses.RTC_BATT + "%" +
         '</div>' +
         '</div>';
     }
