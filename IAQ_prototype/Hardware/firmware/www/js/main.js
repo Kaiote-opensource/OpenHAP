@@ -6,7 +6,7 @@ var urls = {
   "imaging": "imaging.html"
 }
 
-const LOG = false
+const LOG = true
 
 /**
  * Toggle Mobile Menu
@@ -79,14 +79,43 @@ var _kaiote_handler = {
   },
   loadTimeFromUnixTime: function (UNIX_timestamp) {
     var a = new Date(UNIX_timestamp * 1000);
-    var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    var months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
     var year = a.getFullYear();
     var month = months[a.getMonth()];
-    var date = a.getDate();
-    var hour = a.getHours();
-    var min = a.getMinutes();
-    var sec = a.getSeconds();
-    var time = hour + ':' + min + ':' + sec;
+
+    function formattedDay() {
+      if (a.getDate() < 10) {
+        return '0' + a.getDate()
+      }
+      return a.getDate()
+    }
+
+    function formattedSeconds() {
+      if (a.getSeconds() < 10) {
+        return '0' + a.getSeconds()
+      }
+      return a.getSeconds()
+    }
+
+    function formattedMinutes() {
+      if (a.getMinutes() < 10) {
+        return '0' + a.getMinutes()
+      }
+      return a.getMinutes()
+    }
+
+    function formattedHours() {
+      if (a.getHours() < 10) {
+        return '0' + a.getHours()
+      }
+      return a.getHours()
+    }
+
+    var date = formattedDay()
+    var hour = formattedHours();
+    var min = formattedMinutes();
+    var sec = formattedSeconds();
+    var time = date + ' ' + month + ' ' + year + ' ' + hour + ':' + min + ':' + sec;
     return time;
   },
   uuidv4: function () {

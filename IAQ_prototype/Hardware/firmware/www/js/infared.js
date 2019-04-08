@@ -23,9 +23,10 @@ var infared_responses = {
             hoverlabel: {
                 bgcolor: 'white',
                 font: {
-                    color: 'white',
-                    size: '20px'
-                }
+                    family: 'Courier New, monospace',
+                    size: 16,
+                    color: '#ffffff'
+                },
             }
         };
         Plotly.newPlot('infrared-image', data, layout);
@@ -95,7 +96,7 @@ websocketInst.onopen = function (evt) {
 
 websocketInst.onmessage = function (evt) {
     socket.onMessage(evt.data)
-
+    helpers.log(evt.data)
 };
 websocketInst.onerror = function (evt) {
     socket.onError(evt)
