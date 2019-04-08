@@ -235,11 +235,11 @@
                         <div class="col-md-12">
                             <div class="au-breadcrumb-content">
                                 <div class="au-breadcrumb-left">
-                                    <span class="au-breadcrumb-span">>></span>
+                                    <span class="au-breadcrumb-span"></span>
                                     <ul class="list-unstyled list-inline au-breadcrumb__list">
-                                        <li class="list-inline-item active">
+                                        <!-- <li class="list-inline-item active">
                                             <a href="#">Main</a>
-                                        </li>
+                                        </li> -->
                                         <!-- <li class="list-inline-item seprate">
                                             <span>/</span>
                                         </li>
@@ -257,53 +257,50 @@
             <!-- STATISTIC CHART-->
             <section class="statistic-chart">
                 <div class="container">
-                    <div class="row statistic-chart-1">
+                    <div class="row">
+                        <div class="col-md-9">
+                            <div id="infrared-image" style="width: 900px; height: 660px;"></div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="row statistic-chart-1">
 
-                        <div class="col-md-12">
-
-                            <div class="statistic-chart-1-note">
-                                <div class="row">
-                                    <div class="col-md-5">
-                                        <h3 class="title-3 m-b-30">Infared Image</h3>
-
-                                        <img id="infrared-image" width="150" height="150">
-                                    </div>
-                                    <div class="col-md-7">
+                                <div class="col-md-12">
+                                    <div class="statistic-chart-1-note">
                                         <div class="row">
-                                            <div class="col-md-6">
-                                                <div class="row statistic-k">
-                                                    <span class="big col-md-6">Max Temperature</span>
-                                                    <span class="col-md-6" id="t-max"> </span>
-                                                </div>
-                                                <div class="row statistic-k">
-                                                    <span class="big col-md-6">Min Temperature</span>
-                                                    <span class="col-md-6" id="t-min"> </span>
-                                                </div>
-                                                <div class="row statistic-k">
-                                                    <span class="big col-md-6">Conversion Framerate</span>
-                                                    <span class="col-md-6" id="conversion-frame-rate"> </span>
-                                                </div>
+                                            <div class="col-md-12">
+                                                <div class="row">
+                                                    <div class="col-md-6">
+                                                        <div class="row statistic-k">
+                                                            <span class="big col-md-10">Max Temperature</span>
+                                                            <span class="col-md-2" id="t-max"> </span>
+                                                        </div>
+                                                        <div class="row statistic-k">
+                                                            <span class="big col-md-10">Min Temperature</span>
+                                                            <span class="col-md-2" id="t-min"> </span>
+                                                        </div>
+                                                        <div class="row statistic-k">
+                                                            <span class="big col-md-10">Conversion Framerate</span>
+                                                            <span class="col-md-2" id="conversion-frame-rate"> </span>
+                                                        </div>
 
-                                            </div>
+                                                    </div>
 
-                                            <div class="col-md-6">
+                                                    <div class="col-md-6">
 
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
+
                                     </div>
+                                    <img>
+
                                 </div>
 
+
                             </div>
-                            <img>
-
                         </div>
-
-
                     </div>
-
-
-
-
                 </div>
             </section>
             <!-- END STATISTIC CHART-->
@@ -333,7 +330,8 @@
     <!-- <script src="resources/jquery-3.2.1.min.js"></script> -->
     <!-- Bootstrap JS-->
     <!-- <script src="resources/bootstrap-4.1/bootstrap.min.js"></script> -->
-    <script src="resources/chartjs/Chart.bundle.min.js"></script>
+    <script src="resources/plotly.min.js"></script>
+    <!-- <script src="https://cdn.plot.ly/plotly-latest.min.js"></script> -->
     <!-- resources JS       -->
 
     <!-- Main JS-->
