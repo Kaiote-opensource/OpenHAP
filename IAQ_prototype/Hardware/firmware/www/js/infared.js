@@ -1,5 +1,5 @@
-// const SOCKET_URL = "ws://192.168.4.1:80/infared.cgi";
-const SOCKET_URL = "ws://localhost:8999";
+const SOCKET_URL = "ws://192.168.4.1:80/infared.cgi";
+// const SOCKET_URL = "ws://localhost:8999";
 //My Password : $2y$10$Cn8pGbZtpRL8l7supw6FR.ubwn5gu/m4Z5Qvl8lQASv1/mR55Do1i
 // Oyoundis Password : $2y$10$IJe3riEyQdac99pbupozFOh620HBO1fFyxmsFKSiXRFwPn6Tax4DG
 /***
