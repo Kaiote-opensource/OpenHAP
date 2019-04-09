@@ -6,6 +6,7 @@ const SOCKET_URL = "ws://192.168.4.1:80/infared.cgi";
  * Socket Management Library
  */
 var websocketInst = new WebSocket(SOCKET_URL);
+console.log(websocketInst)
 
 var encoded_UTF = ""
 function _base64ToArrayBuffer(base64) {
@@ -80,24 +81,24 @@ var socket = {
     },
     onMessage: function (evt) {
 
-        var response = JSON.parse(evt)
+        // var response = JSON.parse(evt)
 
-        encoded_UTF = response.CAMERA_DATA
+        // encoded_UTF = response.CAMERA_DATA
 
-        infared_responses.imageFloating = Array.prototype.slice.call(new Float32Array(_base64ToArrayBuffer(encoded_UTF)));
+        // infared_responses.imageFloating = Array.prototype.slice.call(new Float32Array(_base64ToArrayBuffer(encoded_UTF)));
 
-        helpers.log(infared_responses.imageFloating)
+        // helpers.log(infared_responses.imageFloating)
 
-        document.getElementById("conversion-frame-rate").innerHTML = response.CONVERSION_FRAMERATE + ""
-        document.getElementById("t-min").innerHTML = infared_responses.imageFloating.reduce(function (a, b) {
-            return Math.min(a, b);
-        }) + ""
-        document.getElementById("t-max").innerHTML = infared_responses.imageFloating.reduce(function (a, b) {
-            return Math.max(a, b);
-        }) + ""
+        // document.getElementById("conversion-frame-rate").innerHTML = response.CONVERSION_FRAMERATE + ""
+        // document.getElementById("t-min").innerHTML = infared_responses.imageFloating.reduce(function (a, b) {
+        //     return Math.min(a, b);
+        // }) + ""
+        // document.getElementById("t-max").innerHTML = infared_responses.imageFloating.reduce(function (a, b) {
+        //     return Math.max(a, b);
+        // }) + ""
         // console.log(infared_responses.imageFloating)
 
-        infared_responses.imaging();
+        // infared_responses.imaging();
         // helpers.log(evt)
     },
     onError: function (evt) {
