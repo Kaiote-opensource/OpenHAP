@@ -1,14 +1,11 @@
 const SOCKET_URL = "ws://192.168.4.1:80/infared.cgi";
 // const SOCKET_URL = "ws://localhost:8999";
-//My Password : $2y$10$Cn8pGbZtpRL8l7supw6FR.ubwn5gu/m4Z5Qvl8lQASv1/mR55Do1i
-// Oyoundis Password : $2y$10$IJe3riEyQdac99pbupozFOh620HBO1fFyxmsFKSiXRFwPn6Tax4DG
 /***
  * Socket Management Library
  */
 var websocketInst = new WebSocket(SOCKET_URL);
-console.log(websocketInst)
 
-var encoded_UTF = ""
+
 function _base64ToArrayBuffer(base64) {
     var binary_string = window.atob(base64);
     var len = binary_string.length;
@@ -19,9 +16,10 @@ function _base64ToArrayBuffer(base64) {
     return bytes.buffer;
 }
 
-
 var infared_responses = {
     imageFloating: [],
+    bufferIn: "",
+    bufferOut: "",
     imageData: function () {
         return this.dataSplit(this.imageFloating);
     },
@@ -58,12 +56,29 @@ var infared_responses = {
             var out = []
             for (let index = i; index < (i + 32); index++) {
                 const element = Number(imgData[index]).toFixed(4);
+                // if( element < 1){
+                //     out.push(30)
+                //     continue;
+                // }
                 out.push(element)
             }
             holder.push(out)
             i += 32
         }
         return holder;
+    },
+    manageBuffer: function (response) {
+
+        if (response.CAMERA_CONT != null || response.CAMERA_CONT != undefined) {
+            this.bufferIn += response.CAMERA_CONT
+        }
+
+        if (response.CAMERA_END != null || response.CAMERA_END != undefined) {
+            this.bufferIn += response.CAMERA_END
+            this.bufferOut = this.bufferIn
+            this.bufferIn = ""
+        }
+
     }
 }
 
@@ -81,24 +96,23 @@ var socket = {
     },
     onMessage: function (evt) {
 
-        // var response = JSON.parse(evt)
+        var response = JSON.parse(evt)
 
-        // encoded_UTF = response.CAMERA_DATA
+        infared_responses.manageBuffer(response)
 
-        // infared_responses.imageFloating = Array.prototype.slice.call(new Float32Array(_base64ToArrayBuffer(encoded_UTF)));
+        infared_responses.imageFloating = Array.prototype.slice.call(new Float32Array(_base64ToArrayBuffer(infared_responses.bufferOut)));
+        helpers.log(infared_responses.imageFloating)
 
-        // helpers.log(infared_responses.imageFloating)
+        document.getElementById("conversion-frame-rate").innerHTML = response.CONVERSION_FRAMERATE + ""
+        document.getElementById("t-min").innerHTML = infared_responses.imageFloating.reduce(function (a, b) {
+            return Number(Math.min(a, b)).toFixed(2);
+        }) + ""
+        document.getElementById("t-max").innerHTML = infared_responses.imageFloating.reduce(function (a, b) {
+            return Number(Math.max(a, b)).toFixed(2)
+        }) + ""
 
-        // document.getElementById("conversion-frame-rate").innerHTML = response.CONVERSION_FRAMERATE + ""
-        // document.getElementById("t-min").innerHTML = infared_responses.imageFloating.reduce(function (a, b) {
-        //     return Math.min(a, b);
-        // }) + ""
-        // document.getElementById("t-max").innerHTML = infared_responses.imageFloating.reduce(function (a, b) {
-        //     return Math.max(a, b);
-        // }) + ""
-        // console.log(infared_responses.imageFloating)
 
-        // infared_responses.imaging();
+        infared_responses.imaging();
         // helpers.log(evt)
     },
     onError: function (evt) {
@@ -106,13 +120,6 @@ var socket = {
     }
 
 }
-
-
-
-
-
-
-
 
 
 
