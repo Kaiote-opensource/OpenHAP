@@ -196,7 +196,7 @@ var socket_responses = {
 
     if (responses.SD_CARD == "DISCONNECTED") {
 
-      document.getElementById("sd-card-val").innerHTML = '<button type="button" class="btn btn-danger">DISCONNECTED</button>';
+      document.getElementById("sd-card-val").innerHTML = '<button type="button" disabled class="btn btn-danger">DISCONNECTED</button>';
 
     } else {
 

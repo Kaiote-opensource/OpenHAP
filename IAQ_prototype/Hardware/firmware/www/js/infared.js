@@ -7,6 +7,18 @@ const SOCKET_URL = "ws://192.168.4.1:80/infared.cgi";
  */
 var websocketInst = new WebSocket(SOCKET_URL);
 
+var encoded_UTF = ""
+function _base64ToArrayBuffer(base64) {
+    var binary_string = window.atob(base64);
+    var len = binary_string.length;
+    var bytes = new Uint8Array(len);
+    for (var i = 0; i < len; i++) {
+        bytes[i] = parseFloat(binary_string.charCodeAt(i));
+    }
+    return bytes.buffer;
+}
+
+
 var infared_responses = {
     imageFloating: [],
     imageData: function () {
@@ -15,11 +27,18 @@ var infared_responses = {
     imaging: function () {
         var data = [{
             z: this.imageData().reverse(),
-            colorscale: 'Bluered',
+            colorscale: 'YIOrRd',
             type: 'heatmap',
             zsmooth: 'best',
         }];
         var layout = {
+            margin: {
+                l: 45,
+                r: 30,
+                b: 60,
+                t: 60,
+                pad: 20
+            },
             hoverlabel: {
                 bgcolor: 'white',
                 font: {
@@ -37,7 +56,7 @@ var infared_responses = {
         for (let i = 0; i < 768;) {
             var out = []
             for (let index = i; index < (i + 32); index++) {
-                const element = imgData[index];
+                const element = Number(imgData[index]).toFixed(4);
                 out.push(element)
             }
             holder.push(out)
@@ -54,13 +73,21 @@ var socket = {
     },
     onOpen: function (evt) {
         helpers.log(evt)
+        console.trace()
     },
     onClose: function (evt) {
         helpers.log(evt)
     },
     onMessage: function (evt) {
+
         var response = JSON.parse(evt)
-        infared_responses.imageFloating = response.CAMERA_DATA
+
+        encoded_UTF = response.CAMERA_DATA
+
+        infared_responses.imageFloating = Array.prototype.slice.call(new Float32Array(_base64ToArrayBuffer(encoded_UTF)));
+
+        helpers.log(infared_responses.imageFloating)
+
         document.getElementById("conversion-frame-rate").innerHTML = response.CONVERSION_FRAMERATE + ""
         document.getElementById("t-min").innerHTML = infared_responses.imageFloating.reduce(function (a, b) {
             return Math.min(a, b);
@@ -69,8 +96,9 @@ var socket = {
             return Math.max(a, b);
         }) + ""
         // console.log(infared_responses.imageFloating)
+
         infared_responses.imaging();
-        helpers.log(evt)
+        // helpers.log(evt)
     },
     onError: function (evt) {
         helpers.log(evt)
