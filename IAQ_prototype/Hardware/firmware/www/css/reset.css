@@ -309,6 +309,95 @@ a:not([href]):not([tabindex]) {
     width: 0px;
 }
 
+.collapse {
+    display: block;
+    max-height: 0px;
+    overflow: hidden;
+    transition: max-height 0.5s cubic-bezier(0, 1, 0, 1);
+}
+
+.collapse.show {
+    max-height: 99em;
+    transition: max-height .5s ease-in-out;
+}
+
+.btn-card-body {
+    width: 100%;
+    padding: 10px;
+}
+
+.accordion {
+    margin: 3em auto;
+    max-width: 100%;
+}
+
+.toggle {
+    display: none;
+}
+
+.option {
+    position: relative;
+    margin-bottom: 1em;
+}
+
+.title, .content {
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+    transition: all 0.2s;
+}
+
+.title {
+    background: #fff;
+    padding: 1em;
+    display: block;
+    color: #7A7572;
+    font-weight: bold;
+}
+
+.title:after, .title:before {
+    content: '';
+    position: absolute;
+    right: 1.25em;
+    top: 1.25em;
+    width: 2px;
+    height: 0.75em;
+    background-color: #7A7572;
+    transition: all 0.2s;
+}
+
+.title:after {
+    -webkit-transform: rotate(90deg);
+    transform: rotate(90deg);
+}
+
+.content {
+    max-height: 0;
+    overflow: hidden;
+    background-color: #fff;
+}
+
+.content p {
+    margin: 0;
+    padding: 0.5em 1em 1em;
+    font-size: 0.9em;
+    line-height: 1.5;
+}
+
+.toggle:checked+.title, .toggle:checked+.title+.content {
+    box-shadow: 3px 3px 6px #ddd, -3px 3px 6px #ddd;
+}
+
+.toggle:checked+.title+.content {
+    max-height: 500px;
+}
+
+.toggle:checked+.title:before {
+    -webkit-transform: rotate(90deg) !important;
+    transform: rotate(90deg) !important;
+}
+
 /***
 *
 *

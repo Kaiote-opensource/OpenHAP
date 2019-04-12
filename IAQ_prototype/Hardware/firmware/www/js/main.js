@@ -1,13 +1,18 @@
+
+/***
+ * Main Function I.e Bootstrap JS replacement
+ */
+
 var urls = {
   "home": "index.html",
   "login": "index.html",
   "advanced": "advanced.html",
   "system": "system.html",
-  "imaging": "imaging.html"
+  "imaging": "imaging.html",
+  "tag": "tag.html"
 }
 
-const LOG = true
-
+const LOG = false
 /**
  * Toggle Mobile Menu
  */

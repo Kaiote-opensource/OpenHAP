@@ -10,7 +10,7 @@
     <meta name="keywords" content="au theme template">
 
     <!-- Title Page-->
-    <title>Kaiote IAQ</title>
+    <title>IAQ</title>
 
 
 
@@ -26,38 +26,9 @@
 
 <body class="animsition">
 
-    <!-- HEADER MOBILE-->
-    <header class="header-mobile header-mobile-2 d-block d-lg-none">
-        <div class="header-mobile__bar">
-            <div class="container-fluid">
-                <div class="header-mobile-inner">
-                    <button onclick="openMenu()" class="btn btn-success" type="button">
-                        Menu
-                    </button>
-                </div>
-            </div>
-        </div>
-        <nav class="navbar-mobile" id="mobile-menu">
-            <div class="container-fluid">
-                <ul class="navbar-mobile__list list-unstyled">
-                    <li class="active">
-                        <a onclick="helpers.redirect('home')">
-                            <span class="bot-line"></span>Main</a>
-                    </li>
-                    <li>
-                        <a onclick="helpers.redirect('imaging')">
-                            <span class="bot-line"></span>Imaging</a>
-                    </li>
-                    <li>
-                        <a onclick="helpers.redirect('tag')">
-                            <span class="bot-line"></span>Tag</a>
-                    </li>
-
-
-                </ul>
-            </div>
-        </nav>
-    </header>
+    <!-- <div class="toast">
+        <p>Your message</p>
+    </div> -->
 
     <div class="page-wrapper">
         <!-- HEADER DESKTOP-->
@@ -72,7 +43,7 @@
                     <div class="header__navbar">
                         <ul class="list-unstyled">
 
-                            <li class="active">
+                            <li>
                                 <a onclick="helpers.redirect('home')">
                                     <span class="bot-line"></span>Main</a>
                             </li>
@@ -80,11 +51,11 @@
                                 <a onclick="helpers.redirect('imaging')">
                                     <span class="bot-line"></span>Imaging</a>
                             </li>
-                            <li>
+                            <li class="active">
                                 <a onclick="helpers.redirect('tag')">
                                     <span class="bot-line"></span>Tag</a>
                             </li>
-                           
+
 
 
                         </ul>
@@ -142,7 +113,39 @@
         </header>
         <!-- END HEADER DESKTOP-->
 
+        <!-- HEADER MOBILE-->
+        <header class="header-mobile header-mobile-2 d-block d-lg-none">
+            <div class="header-mobile__bar">
+                <div class="container-fluid">
+                    <div class="header-mobile-inner">
+                        <button onclick="openMenu()" class="btn btn-success" type="button">
+                            Menu
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <nav class="navbar-mobile" id="mobile-menu">
+                <div class="container-fluid">
+                    <ul class="navbar-mobile__list list-unstyled">
+                        <li>
+                            <a onclick="helpers.redirect('home')">
+                                <span class="bot-line"></span>Main</a>
+                        </li>
+                        <li>
+                            <a onclick="helpers.redirect('imaging')">
+                                <span class="bot-line"></span>Imaging</a>
+                        </li>
+                        <li class="active">
+                            <a onclick="helpers.redirect('tag')">
+                                <span class="bot-line"></span>Tag</a>
+                        </li>
 
+
+
+                    </ul>
+                </div>
+            </nav>
+        </header>
         <div class="sub-header-mobile-2 d-block d-lg-none">
             <div class="header__tool">
                 <div class="header-button-item has-noti js-item-menu">
@@ -234,16 +237,16 @@
                         <div class="col-md-12">
                             <div class="au-breadcrumb-content">
                                 <div class="au-breadcrumb-left">
-                                    <!-- <span class="au-breadcrumb-span">>></span>
+                                    <span class="au-breadcrumb-span"></span>
                                     <ul class="list-unstyled list-inline au-breadcrumb__list">
-                                        <li class="list-inline-item active">
+                                        <!-- <li class="list-inline-item active">
                                             <a href="#">Main</a>
-                                        </li>
-                                        <li class="list-inline-item seprate">
+                                        </li> -->
+                                        <!-- <li class="list-inline-item seprate">
                                             <span>/</span>
                                         </li>
-                                        <li class="list-inline-item">Dashboard</li>
-                                    </ul> -->
+                                        <li class="list-inline-item">Dashboard</li> -->
+                                    </ul>
                                 </div>
 
                             </div>
@@ -256,133 +259,12 @@
             <!-- STATISTIC CHART-->
             <section class="statistic-chart">
                 <div class="container">
-                    <div class="row">
-
-                        <div class="col-md-12">
-                            <!-- CHART-->
-                            <div class="statistic-chart-1">
-                                <div class="row">
-                                    <div class="col-md-3">
-                                        <h2 class="">Device Information</h2>
-                                    </div>
-                                    <div class="col-md-6">
-
-                                    </div>
-                                    <div class="col-md-3">
-                                        <div class="row">
-                                            <div class="col-md-12">
-                                                <button class="btn btn-block btn-success"
-                                                    onclick="socket.startMeasuring()">Start Measurement</button>
-                                            </div>
-                                        </div>
-                                        <br>
-                                        <div class="row">
-                                            <div class="col-md-12">
-                                                <button class="btn btn-block btn-success"
-                                                    onclick="socket.sendTime()">Set Time</button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-
-                                <div class="statistic-chart-1-note">
-                                    <div class="row">
-                                        <div class="col-md-4">
-                                            <div class="row statistic-k">
-                                                <span class="big col-md-6">Clock battery level</span>
-                                                <span class="big-1 col-md-6" id="main-bat-val"></span>
-                                            </div>
-                                            <!-- <div class="row">
-                                                <span class="big col-md-6">PM 2.5</span>
-                                                <span class="col-md-6" id="pm25-val"></span>
-                                            </div>
-                                            
-                                            <div class="row">
-                                                <span class="big col-md-6">Humidity</span>
-                                                <span class="col-md-6" id="hum-val"></span>
-                                            </div> -->
-                                            <!-- <div class="row">
-                                                <span class="big col-md-6">Temperature</span>
-                                                <span class="col-md-6" id="temp-val"></span>
-                                            </div> -->
-
-
-                                            <div class="row statistic-k">
-                                                <span class="big col-md-6">SD Card</span>
-                                                <span class="big-1 col-md-6" id="sd-card-val"></span>
-                                            </div>
-                                            <div class="row statistic-k">
-                                                <span class="big col-md-6">Device Time</span>
-                                                <span class="big-1 col-md-6" id="device-time"></span>
-                                            </div>
-
-
-
-
-
-                                        </div>
-                                        <div class="col-md-4">
-
-                                            <!-- <span class="big">10,368</span>
-                                            <span>/ 16220 items sold</span> -->
-                                        </div>
-                                        <div class="col-md-4">
-
-                                            <!-- <span class="big">10,368</span>
-                                            <span>/ 16220 items sold</span> -->
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            <!-- END CHART-->
-                        </div>
-
+                    <div id="tag-hub" class="row">
 
                     </div>
-
                 </div>
             </section>
             <!-- END STATISTIC CHART-->
-            <center>
-                <div class="lds-css ng-scope" id="graph-loader">
-                    <div style="width:60px;height:60px;" class="lds-dual-ring">
-                        <div></div>
-                    </div>
-                    <style type="text/css">
-                    </style>
-                </div>
-            </center>
-            <section class="p-t-60 p-b-20">
-                <div class="container">
-                    <div class="row">
-                        <div class="col-md-4" id="temperature-graph">
-                            <div class="">
-                                <div class="">
-                                    <h2 class="text-center">Temperature(°c)</h2>
-                                </div>
-                                <div id="temp-graph"></div>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="">
-                                <div class="">
-                                    <h2 class="text-center">Humidity(% RH)</h2>
-                                </div>
-                                <div id="humidity-graph"></div>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="">
-                                <div class="">
-                                    <h2 class="text-center">PM 2.5( µg/m3)</h2>
-                                </div>
-                                <div id="pm25-graph"></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </section>
 
 
 
@@ -405,16 +287,11 @@
 
     </div>
 
-    <!-- Jquery JS-->
-    <!-- <script src="resources/jquery-3.2.1.min.js"></script> -->
-    <!-- Bootstrap JS-->
-    <!-- <script src="resources/bootstrap-4.1/bootstrap.min.js"></script> -->
-    <script src="resources/plotly.min.js"></script>
-    <!-- resources JS       -->
 
+    <script src="resources/plotly.min.js"></script>
     <!-- Main JS-->
     <script src="js/main.js"></script>
-    <script src="js/status.js"></script>
+    <script src="js/tag.js"></script>
 
 </body>
 
