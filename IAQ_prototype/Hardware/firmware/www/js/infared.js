@@ -100,7 +100,7 @@ var socket = {
 
         infared_responses.manageBuffer(response)
 
-        infared_responses.imageFloating = Array.prototype.slice.call(new Float32Array(_base64ToArrayBuffer(infared_responses.bufferOut)));
+        infared_responses.imageFloating = Array.prototype.slice.call(new Float32Array(_base64ToArrayBuffer(infared_responses.bufferOut))).reverse();
         helpers.log(infared_responses.imageFloating)
 
         document.getElementById("conversion-frame-rate").innerHTML = response.CONVERSION_FRAMERATE + ""
