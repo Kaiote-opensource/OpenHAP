@@ -696,19 +696,18 @@ void app_main()
 {
     esp_err_t ret;
 
-    SemaphoreHandle_t HIH6030_bus_mutex = NULL;
+    SemaphoreHandle_t i2c_bus_mutex = NULL;
     SemaphoreHandle_t HIH6030_data_mutex = NULL;
-    SemaphoreHandle_t TCA9534_bus_mutex = NULL;
     SemaphoreHandle_t TCA9534_data_mutex = NULL;
 
     peripherals_struct device_peripherals;
 
-    ret=setupGpioExpander(&(device_peripherals.IAQ_TCA9534), &TCA9534_data_mutex, &TCA9534_bus_mutex);
+    ret=setupGpioExpander(&(device_peripherals.IAQ_TCA9534), &TCA9534_data_mutex, &i2c_bus_mutex);
     if(ret != ESP_OK)
     {
         /*Do something*/
     }
-    ret=setupTempHumiditySensor(&(device_peripherals.IAQ_HIH6030), &HIH6030_data_mutex, &HIH6030_bus_mutex);
+    ret=setupTempHumiditySensor(&(device_peripherals.IAQ_HIH6030), &HIH6030_data_mutex, &i2c_bus_mutex);
     if(ret != ESP_OK)
     {
         /*Do something*/
