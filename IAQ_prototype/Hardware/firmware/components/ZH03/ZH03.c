@@ -28,11 +28,11 @@ esp_err_t get_particulate_reading(ZH03* ZH03_inst)
     uint32_t sent_checksum = 0;
 
     int rxBytes = uart_read_bytes(UART_NUM_1, data, RX_BUF_SIZE, 1500 / portTICK_RATE_MS);
-    if (rxBytes > 0) 
+    if (rxBytes >= ZH03_CHECKSUM_LOW_BYTE_POS) 
     {
         ESP_LOGI(TAG, "Read %d bytes", rxBytes);
         ESP_LOG_BUFFER_HEXDUMP(TAG, data, rxBytes, ESP_LOG_INFO);
-        for(int i=0; i < RX_BUF_SIZE; i++)
+        for(int i=0; i < rxBytes-1; i++)
         {
             if(data[i] == 0x42)
             {

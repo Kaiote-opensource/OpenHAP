@@ -57,6 +57,8 @@
 //#include "MLX90640_API.h"
 //#include "MLX90640_I2C_Driver.h"
 
+#include "driver/uart.h"
+
 #include "esp_bt.h"
 #include "esp_bt_defs.h"
 #include "esp_bt_main.h"
@@ -77,6 +79,15 @@
 
 static const char* TAG = "APP-MAIN";
 
+static char* infared_ws_message = "Hi, Infared websocket!";
+static char* status_ws_message = "Hi, Status websocket!";
+
+static const char infared_cgi_resource_string[] = "/infared.cgi";
+static const char status_cgi_resource_string[] = "/status.cgi";
+
+
+static char* null_test_string = "\0";
+
 uint32_t unix_time = 1554909924;
 
 typedef struct
@@ -86,6 +97,8 @@ typedef struct
     TCA9534 IAQ_TCA9534;
 }peripherals_struct;
 
+peripherals_struct device_peripherals;
+
 /*Main task handleS*/
 static TaskHandle_t xWebServerTaskHandle = NULL;
 static TaskHandle_t xDataloggerTaskHandle = NULL;
@@ -94,6 +107,7 @@ static TaskHandle_t xDataloggerTaskHandle = NULL;
 static TaskHandle_t xuartSensorTaskHandle = NULL;
 static TaskHandle_t xStatusBroadcastHandle = NULL;
 static TaskHandle_t xInfaredBroadcastHandle = NULL;
+static TaskHandle_t xTCA9534HandlerTaskHandle = NULL;
 
 static char connectionMemory[sizeof(RtosConnType) * MAX_CONNECTIONS];
 static HttpdFreertosInstance httpdFreertosInstance;
@@ -141,6 +155,10 @@ float camera_data_float[768]= {0.825253,0.455252,0.720179,30.544859,30.427420,30
 static void esp_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t* param);
 static void esp_eddystone_show_inform(const esp_eddystone_result_t* res, const esp_ble_gap_cb_param_t* scan_result);
 
+void uartSensorTask(void *pvParameters);
+void statusPageWsBroadcastTask(void *pvParameters);
+void infaredPageWsBroadcastTask(void *pvParameters);
+
 static esp_ble_scan_params_t ble_scan_params = {
     .scan_type              = BLE_SCAN_TYPE_ACTIVE,
     .own_addr_type          = BLE_ADDR_TYPE_PUBLIC,
@@ -162,14 +180,13 @@ void TCA9534HandlerTask(void* pvParameters)
     int32_t cd_level = 0;
     uint32_t io_num;
 
-    peripherals_struct* device_peripherals = (peripherals_struct*) pvParameters;
+    TCA9534_get_level(&(device_peripherals.IAQ_TCA9534), TCA9534_SD_CD, &cd_level);
+    TCA9534_get_level(&(device_peripherals.IAQ_TCA9534), TCA9534_SD_WP, &wp_level);
 
-    TCA9534_get_level(&(device_peripherals->IAQ_TCA9534), TCA9534_SD_CD, &cd_level);
-    TCA9534_get_level(&(device_peripherals->IAQ_TCA9534), TCA9534_SD_WP, &wp_level);
+    TCA9534_set_level(&(device_peripherals.IAQ_TCA9534), TCA9534_WARN_LED, !cd_level);
 
-    TCA9534_set_level(&(device_peripherals->IAQ_TCA9534), TCA9534_WARN_LED, !cd_level);
-
-    for(;;) {
+    while(1) 
+    {
         if(xQueueReceive(gpio_evt_queue, &io_num, portMAX_DELAY)) 
         {
             if(io_num == GPIO_TCA9534_INT)
@@ -178,17 +195,17 @@ void TCA9534HandlerTask(void* pvParameters)
                 vTaskDelay(100 / portTICK_PERIOD_MS);
 
                 printf("\nTCA9534 interrupt received\n");
-                if (TCA9534_get_level(&(device_peripherals->IAQ_TCA9534), TCA9534_SD_CD, &cd_level) != ESP_OK)
+                if (TCA9534_get_level(&(device_peripherals.IAQ_TCA9534), TCA9534_SD_CD, &cd_level) != ESP_OK)
                 {
                     printf("\nError getting card detect level");
                 }
                 else
                 {
                     printf("\nCD level is set to %d\n", (int)cd_level);
-                    TCA9534_set_level(&(device_peripherals->IAQ_TCA9534), TCA9534_WARN_LED, !cd_level);
+                    TCA9534_set_level(&(device_peripherals.IAQ_TCA9534), TCA9534_WARN_LED, !cd_level);
                 }
 
-                if (TCA9534_get_level(&(device_peripherals->IAQ_TCA9534), TCA9534_SD_WP, &wp_level) != ESP_OK)
+                if (TCA9534_get_level(&(device_peripherals.IAQ_TCA9534), TCA9534_SD_WP, &wp_level) != ESP_OK)
                 {
                     printf("\nError getting Write protect level\n");
                 }
@@ -324,27 +341,104 @@ static void myWebsocketRecv(Websock *ws, char *data, int len, int flags)
     receiveCommand(data);
 }
 
-//Websocket connected. Install reception handler and send welcome message.
-static void myStatusWebsocketConnect(Websock *ws) 
+/*Websocket disconnected. Stop task if none connected*/
+static void myStatusWebsocketClose(Websock *ws)
 {
-	ws->recvCb=myWebsocketRecv;
-	cgiWebsocketSend(&httpdFreertosInstance.httpdInstance,
-	                 ws, "Hi, Status websocket!", 14, WEBSOCK_FLAG_NONE);
+    int connections = cgiWebsockBroadcast(&httpdFreertosInstance.httpdInstance, status_cgi_resource_string, null_test_string, strlen(null_test_string), WEBSOCK_FLAG_NONE);
+    ESP_LOGI(TAG, "Status page connection close received, Previous connections were %d", connections);
+
+    if(connections == 1)
+    {
+        vTaskDelete(xStatusBroadcastHandle);
+        vTaskDelete(xuartSensorTaskHandle);
+        vTaskDelete(xTCA9534HandlerTaskHandle);
+        //Remember to flush hardware buffer via a deinit method for the peripheral(Device insensitive)
+    }
+
 }
 
-//Websocket connected. Install reception handler and send welcome message.
+/*Websocket disconnected. Stop task if none connected*/
+static void myInfaredWebsocketClose(Websock *ws)
+{
+    int connections = cgiWebsockBroadcast(&httpdFreertosInstance.httpdInstance, status_cgi_resource_string, null_test_string, strlen(null_test_string), WEBSOCK_FLAG_NONE);
+    ESP_LOGI(TAG, "Status page connection close received, Previous connections were %d", connections);
+
+    if(connections == 1)
+    {
+        vTaskDelete(xInfaredBroadcastHandle);
+        //Remember to flush hardware buffer via a deinit method for the peripheral(Device insensitive)
+    }
+
+}
+
+/*Websocket connected. Start task if none prior connected, set websocket callback methods and send welcome message.*/
+static void myStatusWebsocketConnect(Websock *ws) 
+{
+    int connections = cgiWebsockBroadcast(&httpdFreertosInstance.httpdInstance, status_cgi_resource_string, null_test_string, strlen(null_test_string), WEBSOCK_FLAG_NONE);
+    ESP_LOGI(TAG, "Status page connection start received, Previous connections were %d", connections);
+
+    if(connections == 0)
+    {
+            device_peripherals.IAQ_ZH03.PM_2_5=0;
+            device_peripherals.IAQ_TCA9534.pinModeConf=0;
+            device_peripherals.IAQ_TCA9534.port=0;
+            device_peripherals.IAQ_TCA9534.polarity=0;
+            device_peripherals.IAQ_TCA9534.polarity=0;
+            device_peripherals.IAQ_HIH6030.temperature=0;
+            device_peripherals.IAQ_HIH6030.humidity=0;
+            device_peripherals.IAQ_HIH6030.status=0;
+
+        	if(xTaskCreatePinnedToCore(TCA9534HandlerTask, "TCA9534Interrupt", 2048, NULL, 1, &xTCA9534HandlerTaskHandle, 0) == pdPASS &&
+               xTaskCreatePinnedToCore(uartSensorTask, "uartSensorTask", 4096, NULL, 2, &xuartSensorTaskHandle, 0) == pdPASS &&
+               xTaskCreate(statusPageWsBroadcastTask, "statusPageTask", 4096, NULL, 3, &xStatusBroadcastHandle) == pdPASS)
+            {
+                    ESP_LOGI(TAG, "Created status broadcast task");
+                	ws->recvCb=myWebsocketRecv;
+                    ws->closeCb=myStatusWebsocketClose;
+	                cgiWebsocketSend(&httpdFreertosInstance.httpdInstance, ws, status_ws_message, strlen(status_ws_message), WEBSOCK_FLAG_NONE);
+            }
+            else
+            {
+                ESP_LOGE(TAG, "Failed to create status broadcast task");
+                return;
+            }
+    }
+	ws->recvCb=myWebsocketRecv;
+    ws->closeCb=myStatusWebsocketClose;
+	cgiWebsocketSend(&httpdFreertosInstance.httpdInstance, ws, status_ws_message, strlen(status_ws_message), WEBSOCK_FLAG_NONE);
+}
+
+/*Websocket connected. Start task if none prior connected, set websocket callback methods and send welcome message.*/
 static void myInfaredWebsocketConnect(Websock *ws) 
 {
+    int connections = cgiWebsockBroadcast(&httpdFreertosInstance.httpdInstance, infared_cgi_resource_string, null_test_string, strlen(null_test_string), WEBSOCK_FLAG_NONE);
+    ESP_LOGI(TAG, "Infared page connection start received, Previous connections were %d", connections);
+
+    if(connections == 0)
+    {
+        	if(xTaskCreatePinnedToCore(infaredPageWsBroadcastTask, "infaredPageTask", 16384, NULL, 2, &xInfaredBroadcastHandle, 0) == pdPASS)
+            {
+                    ESP_LOGI(TAG, "Created infared broadcast task");
+                	ws->recvCb=myWebsocketRecv;
+                    ws->closeCb=myInfaredWebsocketClose;
+	                cgiWebsocketSend(&httpdFreertosInstance.httpdInstance, ws, infared_ws_message, strlen(infared_ws_message), WEBSOCK_FLAG_NONE);
+            }
+            else
+            {
+                ESP_LOGE(TAG, "Failed to create infared broadcast task");
+                return;
+            }
+    }
 	ws->recvCb=myWebsocketRecv;
-	cgiWebsocketSend(&httpdFreertosInstance.httpdInstance,
-	                 ws, "Hi, Infared websocket!", 14, WEBSOCK_FLAG_NONE);
+    ws->closeCb=myInfaredWebsocketClose;
+    cgiWebsocketSend(&httpdFreertosInstance.httpdInstance, ws, infared_ws_message, strlen(infared_ws_message), WEBSOCK_FLAG_NONE);
 }
 
 HttpdBuiltInUrl builtInUrls[]={
 	ROUTE_CGI_ARG("*", cgiRedirectApClientToHostname, "esp.nonet"),
 	ROUTE_REDIRECT("/", "/index.html"),
-	ROUTE_WS("/status.cgi", myStatusWebsocketConnect),
-	ROUTE_WS("/infared.cgi", myInfaredWebsocketConnect),
+	ROUTE_WS(status_cgi_resource_string, myStatusWebsocketConnect),
+	ROUTE_WS(infared_cgi_resource_string, myInfaredWebsocketConnect),
 	//ROUTE_WS("/bluetooth.cgi", myBluetoothWebsocketConnect),
 
 	ROUTE_FILESYSTEM(),
@@ -361,7 +455,7 @@ char* simulateStatusValues(char *status_string, peripherals_struct* device_perip
     JSON_Object *root_object = json_value_get_object(root_value);
     json_object_set_number(root_object, "HUM",  (int)(device_peripherals->IAQ_HIH6030.humidity));
     json_object_set_number(root_object, "TEMP", (int)(device_peripherals->IAQ_HIH6030.temperature));
-    if((device_peripherals->IAQ_ZH03.PM_2_5) != ESP_FAIL || (device_peripherals->IAQ_ZH03.PM_2_5) != ESP_ERR_TIMEOUT)
+    if((device_peripherals->IAQ_ZH03.PM_2_5) != ESP_FAIL && (device_peripherals->IAQ_ZH03.PM_2_5) != ESP_ERR_TIMEOUT && (device_peripherals->IAQ_ZH03.PM_2_5) != 0)
     {
         json_object_set_number(root_object, "PM25", device_peripherals->IAQ_ZH03.PM_2_5);
     }
@@ -418,32 +512,25 @@ char* simulateInfaredValues(char* base64_dst, float* data)
 }
 void uartSensorTask(void *pvParameters)
 {
-    peripherals_struct* device_peripherals = (peripherals_struct*) pvParameters;
-
+    uart_flush(UART_NUM_1);
 	while(1) 
     {
-    get_particulate_reading(&(device_peripherals->IAQ_ZH03));
+    get_particulate_reading(&(device_peripherals.IAQ_ZH03));
 	}
     vTaskDelete(NULL);
 }
 
 void statusPageWsBroadcastTask(void *pvParameters)
 {
-    peripherals_struct* device_peripherals = (peripherals_struct*) pvParameters;
-
     int connections;
     char *status_string = NULL;
 
-	xTaskCreate(uartSensorTask, "uartSensorTask", 4096, device_peripherals, 3, &xuartSensorTaskHandle);
-
 	while(1) {
         
-        status_string=simulateStatusValues(status_string, device_peripherals);
+        status_string=simulateStatusValues(status_string, &device_peripherals);
         if(status_string != NULL)
         {  
-		    connections = cgiWebsockBroadcast(&httpdFreertosInstance.httpdInstance,
-		                                      "/status.cgi",status_string, strlen(status_string),
-		                                      WEBSOCK_FLAG_NONE);
+		    connections = cgiWebsockBroadcast(&httpdFreertosInstance.httpdInstance, status_cgi_resource_string, status_string, strlen(status_string), WEBSOCK_FLAG_NONE);
             json_free_serialized_string(status_string);
             ESP_LOGD(TAG,"Broadcast sent to %d connections", connections);
         }
@@ -509,9 +596,7 @@ void infaredPageWsBroadcastTask(void *pvParameters)
                     break;
                 }
                 //ESP_LOG_BUFFER_HEXDUMP("JSON string:", json_string, strlen(json_string)+1, ESP_LOG_DEBUG);
-                connections = cgiWebsockBroadcast(&httpdFreertosInstance.httpdInstance,
-                                              "/infared.cgi", json_string, strlen(json_string),
-                                              WEBSOCK_FLAG_NONE);
+                connections = cgiWebsockBroadcast(&httpdFreertosInstance.httpdInstance, infared_cgi_resource_string, json_string, strlen(json_string), WEBSOCK_FLAG_NONE);
                 ESP_LOGD(TAG,"Sent chunk %d of raw data size %d of a maximum %d byte raw payload to %d connections", i, chunk_size, strlen(base64_string), connections);
                 ESP_LOGD(TAG,"json data size for this chunk is %d", strlen(json_string));
                 free(data_txt_chunk);
@@ -543,7 +628,8 @@ static esp_err_t wifi_event_handler(void *ctx, system_event_t *event)
     case SYSTEM_EVENT_AP_START:
     {
         tcpip_adapter_ip_info_t ap_ip_info;
-        if (tcpip_adapter_get_ip_info(TCPIP_ADAPTER_IF_AP, &ap_ip_info) == 0) {
+        if (tcpip_adapter_get_ip_info(TCPIP_ADAPTER_IF_AP, &ap_ip_info) == 0)
+        {
             ESP_LOGI(TAG, "~~~~~~~~~~~");
             ESP_LOGI(TAG, "IP:" IPSTR, IP2STR(&ap_ip_info.ip));
             ESP_LOGI(TAG, "MASK:" IPSTR, IP2STR(&ap_ip_info.netmask));
@@ -611,8 +697,6 @@ void ICACHE_FLASH_ATTR init_wifi(void) {
 
 void webServerTask(void *pvParameters)
 {
-    peripherals_struct* device_peripherals = (peripherals_struct*) pvParameters;
-
 	espFsInit((void*)(webpages_espfs_start));
 
 	tcpip_adapter_init();
@@ -626,13 +710,10 @@ void webServerTask(void *pvParameters)
 
 	init_wifi();
 
-    /*Start these webpage based websocket broadcasts dependant if there are any users on the page*/
-	xTaskCreate(statusPageWsBroadcastTask, "statusPageTask", 4096, device_peripherals, 3, &xStatusBroadcastHandle);
-	xTaskCreate(infaredPageWsBroadcastTask, "infaredPageTask", 16384, NULL, 2, &xInfaredBroadcastHandle);
-
     while(1)
     {
-
+        /*Jusr a delay to yield control of the CPU, to feed the watchdog via the idle task, though this task priority is very low*/
+     	vTaskDelay(100/portTICK_RATE_MS);
     }
     vTaskDelete(NULL);
 }
@@ -643,7 +724,7 @@ esp_err_t setupTempHumiditySensor(HIH6030* HIH6030_inst, SemaphoreHandle_t* data
     *data_mutex = xSemaphoreCreateMutex();
 
     esp_err_t ret = HIH6030_init(HIH6030_inst, 0x27, I2C_MASTER_NUM, I2C_MASTER_FREQ_HZ, I2C_MASTER_SDA_IO, GPIO_PULLUP_DISABLE, I2C_MASTER_SCL_IO, GPIO_PULLUP_DISABLE, 
-                                                                                                                               data_mutex, bus_mutex);
+                                                                                                                                 data_mutex, bus_mutex);
     return ret;
 }
 
@@ -661,7 +742,7 @@ esp_err_t setupGpioExpander(TCA9534* TCA9534_inst, SemaphoreHandle_t* data_mutex
     gpio_isr_handler_add(GPIO_TCA9534_INT, TCA9534_isr_handler, (void*)GPIO_TCA9534_INT);
 
     esp_err_t ret = TCA9534_init(TCA9534_inst, 0x27, I2C_MASTER_NUM, I2C_MASTER_FREQ_HZ, I2C_MASTER_SDA_IO, GPIO_PULLUP_DISABLE, I2C_MASTER_SCL_IO, GPIO_PULLUP_DISABLE, 
-                                                                                                                               data_mutex, bus_mutex);
+                                                                                                                                 data_mutex, bus_mutex);
     if(ret != ESP_OK)
     {
         /*Do something*/
@@ -700,8 +781,6 @@ void app_main()
     SemaphoreHandle_t HIH6030_data_mutex = NULL;
     SemaphoreHandle_t TCA9534_data_mutex = NULL;
 
-    peripherals_struct device_peripherals;
-
     ret=setupGpioExpander(&(device_peripherals.IAQ_TCA9534), &TCA9534_data_mutex, &i2c_bus_mutex);
     if(ret != ESP_OK)
     {
@@ -731,23 +810,25 @@ void app_main()
     /*Reboot if unsuccessful*/
     ESP_ERROR_CHECK(ret);
 
-    ESP_ERROR_CHECK(esp_bt_controller_mem_release(ESP_BT_MODE_CLASSIC_BT));
-    esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
-    esp_bt_controller_init(&bt_cfg);
-    esp_bt_controller_enable(ESP_BT_MODE_BLE);
+    //ESP_ERROR_CHECK(esp_bt_controller_mem_release(ESP_BT_MODE_CLASSIC_BT));
+    //esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
+    //esp_bt_controller_init(&bt_cfg);
+    //esp_bt_controller_enable(ESP_BT_MODE_BLE);
     //esp_bt_controller_init(&bt_cfg);
  
-    esp_eddystone_init();
+    //esp_eddystone_init();
 
     /*<! set scan parameters */
-    esp_ble_gap_set_scan_params(&ble_scan_params);
+    //esp_ble_gap_set_scan_params(&ble_scan_params);
     /*Set up supervisor task to perform task setup and synchronisation*/
-    xTaskCreate(webServerTask, "webServerTask", 4096, &device_peripherals, 1, &xWebServerTaskHandle);
-    xTaskCreate(TCA9534HandlerTask, "TCA9534Interrupt", 2048, &device_peripherals, 1, NULL);
+
+    /*This should Same priority as the bluetooth task, but we will set the antenna access prioritisation in ESP-IDF, of the two*/
+    xTaskCreatePinnedToCore(webServerTask, "webServerTask", 4096, NULL, 10, &xWebServerTaskHandle, 0);
 
     while(1)
     {
-
+        /*Jusr a delay to yield control of the CPU, to feed the watchdog via the idle task, though this task priority is very low*/
+     	vTaskDelay(100/portTICK_RATE_MS);
     }
     vTaskDelete(NULL);
 }
