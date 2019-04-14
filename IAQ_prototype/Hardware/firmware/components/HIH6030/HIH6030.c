@@ -58,7 +58,9 @@ static esp_err_t HIH6030_i2c_start_measurement(HIH6030* HIH6030_inst)
     i2c_master_start(i2c_cmd);
     i2c_master_write_byte(i2c_cmd, ((HIH6030_inst->address)<<1) | WRITE_BIT, ACK_CHECK_EN);
     i2c_master_stop(i2c_cmd);
+    xSemaphoreTake(HIH6030_inst->i2c_bus_mutex, portMAX_DELAY);
     esp_err_t ret = i2c_master_cmd_begin(HIH6030_inst->port, i2c_cmd, 1000 / portTICK_RATE_MS);
+    xSemaphoreGive(HIH6030_inst->i2c_bus_mutex);
     i2c_cmd_link_delete(i2c_cmd);
     return ret;
 }
@@ -75,7 +77,9 @@ static esp_err_t HIH6030_i2c_read_measurement(HIH6030* HIH6030_inst, uint8_t* da
     i2c_master_read_byte(i2c_cmd, data_rd+(HIH6030_PAYLOAD_BYTES-1), I2C_MASTER_LAST_NACK);
 
     i2c_master_stop(i2c_cmd);
+    xSemaphoreTake(HIH6030_inst->i2c_bus_mutex, portMAX_DELAY);
     esp_err_t ret = i2c_master_cmd_begin(HIH6030_inst->port, i2c_cmd, 1000 / portTICK_RATE_MS);
+    xSemaphoreGive(HIH6030_inst->i2c_bus_mutex);
     i2c_cmd_link_delete(i2c_cmd);
     if(ret != ESP_OK)
     {
@@ -88,40 +92,24 @@ static esp_err_t HIH6030_i2c_read_measurement(HIH6030* HIH6030_inst, uint8_t* da
 }
 
 
-esp_err_t HIH6030_init(HIH6030* HIH6030_inst, int address, i2c_port_t port, int frequency, gpio_num_t sda_gpio, gpio_pullup_t sda_pullup_state, 
-                                                                                      gpio_num_t scl_gpio, gpio_pullup_t scl_pullup_state,
-                                                                                      SemaphoreHandle_t* data_mutex, SemaphoreHandle_t* bus_mutex)
+esp_err_t HIH6030_init(HIH6030* HIH6030_inst, int address, i2c_port_t port, SemaphoreHandle_t* bus_mutex)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
-    esp_err_t ret = ESP_OK;
-
-    int i2c_master_port = port;
-    i2c_config_t conf;
-    conf.mode = I2C_MODE_MASTER;
-    conf.sda_io_num = sda_gpio;
-    conf.sda_pullup_en = sda_pullup_state;
-    conf.scl_io_num = scl_gpio;
-    conf.scl_pullup_en = scl_pullup_state;
-    conf.master.clk_speed = frequency;
-    //i2c_param_config(i2c_master_port, &conf);
-    //ret=i2c_driver_install(i2c_master_port, conf.mode, 0, 0, 0);
-    //if(ret != ESP_OK)
-    //{
-        /*return ret*/;
-    //} 
-    HIH6030_inst->address = address;
-    HIH6030_inst->port = port;
-    HIH6030_inst->i2c_bus_mutex=*bus_mutex;
-    HIH6030_inst->device_data_mutex=*data_mutex;
-
-    return ret;
+    if(bus_mutex != NULL && HIH6030_inst != NULL)
+    {
+        HIH6030_inst->address = address;
+        HIH6030_inst->port = port;
+        HIH6030_inst->i2c_bus_mutex=*bus_mutex;
+        return ESP_OK;
+    }
+    return ESP_ERR_INVALID_ARG;
 }
 
 /*Only to be used if device is the only one on the i2c bus or for testing*/
-esp_err_t HIH6030_deinit(i2c_port_t port)
-{
-    return(i2c_driver_delete(port));
-}
+// esp_err_t HIH6030_deinit(i2c_port_t port)
+// {
+//     return(i2c_driver_delete(port));
+// }
 
 esp_err_t get_temp_humidity(HIH6030* HIH6030_inst)
 {
@@ -132,20 +120,14 @@ esp_err_t get_temp_humidity(HIH6030* HIH6030_inst)
     uint16_t humidity_raw = 0;
     uint16_t temperature_raw = 0;
 
-    xSemaphoreTake(HIH6030_inst->i2c_bus_mutex, portMAX_DELAY);
-    xSemaphoreTake(HIH6030_inst->device_data_mutex, portMAX_DELAY);
     esp_err_t ret = HIH6030_i2c_start_measurement(HIH6030_inst);
-    xSemaphoreGive(HIH6030_inst->i2c_bus_mutex);
     if(ret != ESP_OK)
     {
         return ret;
     }
 
     vTaskDelay(100 / portTICK_PERIOD_MS);
-    xSemaphoreTake(HIH6030_inst->i2c_bus_mutex, portMAX_DELAY);
     ret = HIH6030_i2c_read_measurement(HIH6030_inst, data_rd);
-    xSemaphoreGive(HIH6030_inst->i2c_bus_mutex);
-    xSemaphoreGive(HIH6030_inst->device_data_mutex);
     if(ret != ESP_OK)
     {
         return ret;

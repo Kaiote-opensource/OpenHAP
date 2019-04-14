@@ -26,11 +26,7 @@
 #define TCA9534_SD_WP                      5
 #define TCA9534_SD_CD                      6
 #define TCA9534_BATT_SEL                   7
-
-#define GPIO_TCA9534_INT                   35
-#define GPIO_INPUT_PIN_SEL                 (1ULL<<GPIO_TCA9534_INT)
-#define ESP_INTR_FLAG_DEFAULT              0             
-
+            
 typedef struct
 {
     uint8_t pinModeConf;
@@ -41,14 +37,11 @@ typedef struct
     i2c_port_t i2c_port;
 
     SemaphoreHandle_t i2c_bus_mutex;
-    SemaphoreHandle_t device_data_mutex; 
 }TCA9534;
 
-esp_err_t TCA9534_init(TCA9534* TCA9534_inst, int address, i2c_port_t port, int frequency, gpio_num_t sda_gpio, gpio_pullup_t sda_pullup_state, 
-                                                                                      gpio_num_t scl_gpio, gpio_pullup_t scl_pullup_state,
-                                                                                      SemaphoreHandle_t* device_data_mutex, SemaphoreHandle_t* i2c_bus_mutex);
+esp_err_t TCA9534_init(TCA9534 *TCA9534_inst, int address, i2c_port_t port, gpio_num_t intr_pin, SemaphoreHandle_t *i2c_bus_mutex);
 /*Only to be used if device is the only one on the i2c bus or for testing*/
-esp_err_t TCA9534_deinit(i2c_port_t port);
+// esp_err_t TCA9534_deinit(i2c_port_t port);
 
 esp_err_t TCA9534_set_port_direction(TCA9534* TCA9534_inst, uint8_t port);
 esp_err_t TCA9534_set_pin_direction(TCA9534* TCA9534_inst, uint8_t pin, int pin_type);
