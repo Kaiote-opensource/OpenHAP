@@ -2,6 +2,32 @@
 /***
  * Main Function I.e Bootstrap JS replacement
  */
+// const triggers = Array.from(document.querySelectorAll('[data-toggle="collapse"]'));
+
+// window.addEventListener('click', (ev) => {
+//   const elm = ev.target;
+//   console.log(ev.target)
+//   if (triggers.includes(elm)) {
+//     const selector = elm.getAttribute('data-target');
+//     console.log(selector)
+//     collapse(selector, 'toggle');
+//   }
+// }, false);
+
+
+// const fnmap = {
+//   'toggle': 'toggle',
+//   'show': 'add',
+//   'hide': 'remove'
+// };
+
+// const collapse = (selector, cmd) => {
+//   const targets = Array.from(document.querySelectorAll(selector));
+//   targets.forEach(target => {
+//     target.classList[fnmap[cmd]]('show');
+//   });
+// }
+
 
 var urls = {
   "home": "index.html",
@@ -31,6 +57,7 @@ var _kaiote_handler = {
   /**
    * Handle login on button click
    */
+  audio: new Audio('./resources/beep4.mp3'),
   _toast_options: {
     type: "success",
     duration: 4000,
@@ -75,8 +102,22 @@ var _kaiote_handler = {
     document.getElementById(name).style.display = "none";
   },
   playSound: function () {
-    var audio = new Audio('./resources/beep4.mp3');
+    var audio = this.audio;
     audio.play();
+  },
+  stopSound: function () {
+    var audio = this.audio;
+    audio.pause();
+  },
+  toHHMMSS: (secs) => {
+    var sec_num = parseInt(secs, 10)
+    var hours = Math.floor(sec_num / 3600) % 24
+    var minutes = Math.floor(sec_num / 60) % 60
+    var seconds = sec_num % 60
+    return [hours, minutes, seconds]
+      .map(v => v < 10 ? "0" + v : v)
+      .filter((v, i) => v !== "00" || i > 0)
+      .join(":")
   },
   currentTime: function () {
     var date = new Date();

@@ -47,7 +47,7 @@ var infared_responses = {
                 },
             }
         };
-        Plotly.newPlot('infrared-image', data, layout);
+        Plotly.newPlot('infrared-image', data, layout, { responsive: true });
 
     },
     dataSplit: function (imgData) {

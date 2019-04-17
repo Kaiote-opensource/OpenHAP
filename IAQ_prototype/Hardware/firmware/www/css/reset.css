@@ -425,6 +425,10 @@ a:not([href]):not([tabindex]) {
     .statistic-k {
         border-bottom: solid 1px #e6e2e2;
     }
+    #infrared-image{
+        height: 48vh;
+        width: 100%;
+    }
 }
 
 /* Small devices (portrait tablets and large phones, 600px and up) */
@@ -434,6 +438,10 @@ a:not([href]):not([tabindex]) {
         font-size: unset;
         color: #000000;
         text-align: right;
+    }
+    #infrared-image{
+        height: 85vh;
+        width: 100%;
     }
 }
 

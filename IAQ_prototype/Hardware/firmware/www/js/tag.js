@@ -8,17 +8,21 @@ var websocketInst = new WebSocket(SOCKET_URL);
 
 var tag = {
     value: [],
-    selectedDevice: "F2416138F240",
+    playFrequency: 1000,
+    selectedDevice: null,
+    activeDevice: null,
     showDevice: function (id) {
-        // console.log(id)
         this.selectedDevice = id
+        this.findDevice(id)
         this.displayAllDevices()
+        this.getDistanceSeverity()
     },
     displayAllDevices: function () {
         var container = document.getElementById("tag-hub")
         container.innerHTML = ""
         for (let index = 0; index < this.value.length; index++) {
             const element = this.value[index];
+            var power_since_time_on = _kaiote_handler.toHHMMSS(element.TIME / 10)
             var div_cont = '<div class="col-md-4">' +
                 '<div class="card" style="width: 100%;">' +
                 '<div class="card-body">' +
@@ -40,11 +44,15 @@ var tag = {
                 '<tbody>' +
                 '<tr>' +
                 '<td>RSSI</td>' +
-                '<td>' + element.RSSI + '</td>' +
+                '<td>' + element.RSSI + ' dBm </td>' +
                 '</tr>' +
                 '<tr>' +
                 '<td>Battery Level</td>' +
-                '<td>' + element.BATT_VOLTAGE + '</td>' +
+                '<td>' + element.BATT_VOLTAGE + ' mV</td>' +
+                '</tr>' +
+                '<tr>' +
+                '<td>Time Since Power On</td>' +
+                '<td>' + power_since_time_on + '</td>' +
                 '</tr>' +
                 '</tbody>' +
                 '</table>' +
@@ -71,6 +79,15 @@ var tag = {
             }
         }
     },
+    findDevice: function (id) {
+        for (let index = 0; index < this.value.length; index++) {
+            const element = this.value[index];
+            if (element.MAC == id) {
+                this.activeDevice = element
+                break;
+            }
+        }
+    },
     addDevice: function (device) {
         /**
          * Check if device exists
@@ -87,7 +104,26 @@ var tag = {
         if (found == 0) {
             this.value.push(device)
         }
+    },
+    playInterval: null,
+    doPlayInterval: function () {
+        this.playInterval = setInterval(function () {
+            _kaiote_handler.playSound()
+        }, this.playFrequency)
+    },
+    getDistanceSeverity: function (data = null) {
+        if (data !== null && this.selectedDevice !== null) {
+            this.activeDevice = data
+        }
 
+        if (this.activeDevice !== null) {
+            var RSSI = 100 - (parseFloat(this.activeDevice.RSSI) + 90)
+            var range = RSSI * 10
+            console.log(range)
+            clearInterval(this.playInterval)
+            this.playFrequency = range
+            this.doPlayInterval()
+        }
     }
 }
 
@@ -107,6 +143,10 @@ var socket = {
         tag.addDevice(response)
         tag.removeDevice()
         tag.displayAllDevices()
+        tag.getDistanceSeverity(response)
+        var audio = new Audio('./resources/notification.mp3')
+        audio.play()
+
         // helpers.log(evt)
     },
     onError: function (evt) {
