@@ -144,10 +144,12 @@ var socket = {
         tag.removeDevice()
         tag.displayAllDevices()
         tag.getDistanceSeverity(response)
-        var audio = new Audio('./resources/notification.mp3')
-        audio.play()
 
-        // helpers.log(evt)
+        if (response.MAC = tag.selectedDevice) {
+            var audio = new Audio('./resources/notification.mp3')
+            audio.play()
+        }
+
     },
     onError: function (evt) {
         helpers.log(response)
