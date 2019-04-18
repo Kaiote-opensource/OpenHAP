@@ -111,9 +111,14 @@ esp_err_t HIH6030_init(HIH6030* HIH6030_inst, int address, i2c_port_t port, Sema
 //     return(i2c_driver_delete(port));
 // }
 
-esp_err_t get_temp_humidity(HIH6030* HIH6030_inst)
+esp_err_t get_temp_humidity(HIH6030* HIH6030_inst, hih6030_status_t* status, float* temperature_val, float* humidity_val)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
+
+    if(status == NULL)
+    {
+        return ESP_ERR_INVALID_ARG;
+    }
 
     uint8_t data_rd[HIH6030_PAYLOAD_BYTES] = {0};
 
@@ -126,18 +131,19 @@ esp_err_t get_temp_humidity(HIH6030* HIH6030_inst)
         return ret;
     }
 
-    vTaskDelay(100 / portTICK_PERIOD_MS);
+    vTaskDelay(50 / portTICK_PERIOD_MS);
+
     ret = HIH6030_i2c_read_measurement(HIH6030_inst, data_rd);
     if(ret != ESP_OK)
     {
         return ret;
     }
 
-    HIH6030_inst->status = extract_bit_field_value(data_rd, 
-                                                   HIH6030_STATUS_BIT_WIDTH, 
-                                                   HIH6030_STATUS_START_BYTE, 
-                                                   HIH6030_STATUS_END_BYTE, 
-                                                   HIH6030_STATUS_START_POS);
+    *status = extract_bit_field_value(data_rd, 
+                                      HIH6030_STATUS_BIT_WIDTH, 
+                                      HIH6030_STATUS_START_BYTE, 
+                                      HIH6030_STATUS_END_BYTE, 
+                                      HIH6030_STATUS_START_POS);
 
     humidity_raw = extract_bit_field_value(data_rd, 
                                            HIH6030_HUMIDITY_BIT_WIDTH, 
@@ -150,12 +156,18 @@ esp_err_t get_temp_humidity(HIH6030* HIH6030_inst)
                                               HIH6030_TEMPERATURE_START_BYTE, 
                                               HIH6030_TEMPERATURE_END_BYTE, 
                                               HIH6030_TEMPERATURE_START_POS);
-    
-    HIH6030_inst->humidity = (humidity_raw/(pow(2, 14) - 2))*100;
-    HIH6030_inst->temperature = ((temperature_raw/(pow(2, 14) - 2))*165)-40;
 
-    ESP_LOGD(TAG, "Status from is %d", (int)HIH6030_inst->status);
-    ESP_LOGD(TAG, "Humidity is %f%% RH", HIH6030_inst->humidity);
-    ESP_LOGD(TAG, "Temperature is %f degree celsius", HIH6030_inst->temperature);
+    ESP_LOGI(TAG, "Status from is 0x%02X", *status);    
+    if(humidity_val != NULL)
+    {
+        *humidity_val = (humidity_raw/(pow(2, 14) - 2))*100;
+        ESP_LOGI(TAG, "Humidity is %f%% RH", *humidity_val);
+    }
+    if(temperature_val != NULL)
+    {
+        ESP_LOGI(TAG, "Temperature is %f degrees celsius", *temperature_val);
+        *temperature_val = ((temperature_raw/(pow(2, 14) - 2))*165)-40;
+    }
+
     return ret;
 }
