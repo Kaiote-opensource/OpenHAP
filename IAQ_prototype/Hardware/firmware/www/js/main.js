@@ -38,7 +38,7 @@ var urls = {
   "tag": "tag.html"
 }
 
-const LOG = false
+const LOG = true
 /**
  * Toggle Mobile Menu
  */
