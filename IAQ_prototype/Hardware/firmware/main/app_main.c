@@ -490,7 +490,7 @@ static void myStatusWebsocketConnect(Websock *ws)
 
     if (connections == 0)
     {
-        if (xTaskCreate(statusPageWsBroadcastTask, "statusPageTask", 8192, NULL, 2, &xStatusBroadcastHandle) == pdPASS)
+        if (xTaskCreate(statusPageWsBroadcastTask, "statusPageTask", 8192, NULL, 2, &xStatusBroadcastHandle))
         {
             ESP_LOGI(TAG, "Created status broadcast task");
             ws->recvCb = myWebsocketRecv;
@@ -517,7 +517,7 @@ static void myInfaredWebsocketConnect(Websock *ws)
 
     if (connections == 0)
     {
-        if (xTaskCreatePinnedToCore(infaredPageWsBroadcastTask, "infaredPageTask", 24000, NULL, 2, &xInfaredBroadcastHandle, 0) == pdPASS)
+        if (xTaskCreatePinnedToCore(infaredPageWsBroadcastTask, "infaredPageTask", 24000, NULL, 2, &xInfaredBroadcastHandle, 0))
         {
             ESP_LOGI(TAG, "Created infared broadcast task");
             ws->recvCb = myWebsocketRecv;
@@ -544,7 +544,7 @@ static void myTagWebsocketConnect(Websock *ws)
 
     if (connections == 0)
     {
-        if (xTaskCreatePinnedToCore(tagPageWsBroadcastTask, "tagPageTask", 2048, NULL, 2, &xTagBroadcastHandle, 0) == pdPASS)
+        if (xTaskCreatePinnedToCore(tagPageWsBroadcastTask, "tagPageTask", 2048, NULL, 2, &xTagBroadcastHandle, 0))
         {
             ESP_LOGI(TAG, "Created tag info broadcast task");
             ws->recvCb = myWebsocketRecv;
@@ -795,7 +795,7 @@ void statusPageWsBroadcastTask(void *pvParameters)
     /*Initialise ADC to sample battery cell voltage*/
     init_adc();
 
-    if (xTaskCreate(TCA9534HandlerTask, "TCA9534Interrupt", 4096, NULL, 1, &xTCA9534HandlerTaskHandle) == pdPASS )
+    if (xTaskCreate(TCA9534HandlerTask, "TCA9534Interrupt", 4096, NULL, 1, &xTCA9534HandlerTaskHandle))
     {
         ESP_LOGI(TAG, "Successfully created TCA9534 handler task");
     }
@@ -804,7 +804,7 @@ void statusPageWsBroadcastTask(void *pvParameters)
         ESP_LOGE(TAG, "Could not create TCA9534 handler task");
     }
         
-    if(xTaskCreate(uartSensorTask, "uartSensorTask", 8192, NULL, 1, &xuartSensorTaskHandle) == pdPASS)
+    if(xTaskCreate(uartSensorTask, "uartSensorTask", 8192, NULL, 1, &xuartSensorTaskHandle))
     {
         ESP_LOGI(TAG, "Successfully created particulate matter sensor handler task");
     }
