@@ -120,6 +120,11 @@ esp_err_t get_temp_humidity(HIH6030* HIH6030_inst, hih6030_status_t* status, flo
         return ESP_ERR_INVALID_ARG;
     }
 
+    if(temperature_val == NULL && humidity_val == NULL)
+    {
+        return ESP_ERR_INVALID_ARG;  
+    }
+
     uint8_t data_rd[HIH6030_PAYLOAD_BYTES] = {0};
 
     uint16_t humidity_raw = 0;
