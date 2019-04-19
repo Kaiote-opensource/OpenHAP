@@ -840,21 +840,72 @@ void statusPageWsBroadcastTask(void *pvParameters)
     vTaskDelete(NULL);
 }
 
-void infaredPageWsBroadcastTask(void *pvParameters)
+void wsStringBurstBroadcast(const char* base64_string, const char* data_continue_identifier, const char* data_end_identifier)
 {
-    ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
-    /*Allocate this image buffer to the psram instead of the stack in internal RAM*/
-    float image_buffer[768] = {0};
-    esp_err_t ret;
     int connections = 0;
-    char *base64_string = NULL;
     char *json_string = NULL;
     char *data_txt_chunk = NULL;
-    char *json_identifier = NULL;
     int size_to_do;
     int chunk_size;
     int size;
     int offset;
+    /* Keep the max burst size at half the maximum allowable HTTPD buffer, incase the string is filled with only escaped 
+       characters after jsonification, which would double the size of characters to the HTTPD buffer length*/
+    int burst_size = ((HTTPD_MAX_SENDBUFF_LEN%2) == 0) ? (HTTPD_MAX_SENDBUFF_LEN/2) : ((HTTPD_MAX_SENDBUFF_LEN/2)-1);
+    size = strlen(base64_string);
+    size_to_do = size;
+    for (int i = 0; size_to_do > 0; i++)
+    {
+        JSON_Value *root_value = json_value_init_object();
+        JSON_Object *root_object = json_value_get_object(root_value);
+        chunk_size = (size_to_do < HTTPD_MAX_SENDBUFF_LEN) ? size_to_do : burst_size;
+        offset = i * burst_size;
+        data_txt_chunk = (char *)malloc(HTTPD_MAX_SENDBUFF_LEN);
+        memset(data_txt_chunk, 0, chunk_size * sizeof(char));
+        strlcpy(data_txt_chunk, base64_string + offset, chunk_size + 1);
+        ESP_LOGI(TAG, "Allocated string chunk length is %d", strlen(data_txt_chunk));
+        //ESP_LOG_BUFFER_HEXDUMP("Raw data chunk:", data_txt_chunk, strlen(data_txt_chunk)+1, ESP_LOG_DEBUG);
+        if (json_object_set_string(root_object, (size_to_do <= burst_size) ? data_end_identifier : data_continue_identifier, data_txt_chunk) != JSONSuccess)
+        {
+            ESP_LOGE(TAG, "Setting json string failed");
+            free(data_txt_chunk);
+            json_value_free(root_value);
+            json_free_serialized_string(json_string);
+            break;
+        }
+        json_string = json_serialize_to_string(root_value);
+        if (json_string == NULL)
+        {
+            ESP_LOGI(TAG, "Allocation of json string failed");
+            free(data_txt_chunk);
+            json_value_free(root_value);
+            json_free_serialized_string(json_string);
+            break;
+        }
+        //ESP_LOG_BUFFER_HEXDUMP("JSON string:", json_string, strlen(json_string)+1, ESP_LOG_DEBUG);
+        connections = cgiWebsockBroadcast(&httpdFreertosInstance.httpdInstance, infared_cgi_resource_string, json_string, strlen(json_string), WEBSOCK_FLAG_NONE);
+        ESP_LOGD(TAG, "Sent chunk %d of raw data size %d of a maximum %d byte raw payload to %d connections", i, chunk_size, strlen(base64_string), connections);
+        ESP_LOGD(TAG, "json data size for this chunk is %d", strlen(json_string));
+        free(data_txt_chunk);
+        json_value_free(root_value);
+        json_free_serialized_string(json_string);
+        size_to_do -= chunk_size; //Subtract the quantity of data already transferred.
+        if (size_to_do < 1024)
+        {
+            if ((offset + chunk_size) != size)
+            {
+                ESP_LOGE(TAG, "Error: Burst size mismatch");
+            }
+        }
+    }
+}
+
+void infaredPageWsBroadcastTask(void *pvParameters)
+{
+    ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
+    char *base64_camera_string = NULL;
+    float image_buffer[768] = {0.0};
+    esp_err_t ret;
 
     EventBits_t xEventGroupValue;
     EventBits_t xBitstoWaitFor = NOTIFY_WEBSERVER_THERMAL_VIEWER_TASK_CLOSE;
@@ -865,62 +916,16 @@ void infaredPageWsBroadcastTask(void *pvParameters)
         {
             ESP_LOGE(TAG, "Failed to get thermal image, returned error code %d", ret);
             //Display Zeroed out image buffer to signify that there is an error.
-            image_buffer = {0}
+            memset(image_buffer, 0, sizeof(image_buffer));
             //Do something else
         }
-        base64_string = b64_encode_thermal_img(base64_string, image_buffer/*camera_data_float*/);
+        base64_camera_string = b64_encode_thermal_img(base64_camera_string, image_buffer/*camera_data_float*/);
 
-        if (base64_string != NULL)
+        if (base64_camera_string != NULL)
         {
             //ESP_LOG_BUFFER_HEXDUMP("Base64 data:", base64_string, strlen(base64_string)+1, ESP_LOG_DEBUG);
-            size = strlen(base64_string);
-            size_to_do = size;
-            for (int i = 0; size_to_do > 0; i++)
-            {
-                JSON_Value *root_value = json_value_init_object();
-                JSON_Object *root_object = json_value_get_object(root_value);
-                chunk_size = (size_to_do < HTTPD_MAX_SENDBUFF_LEN) ? size_to_do : 1024;
-                offset = i * 1024;
-                json_identifier = (size_to_do <= 1024) ? "CAMERA_END" : "CAMERA_CONT";
-                data_txt_chunk = (char *)malloc(HTTPD_MAX_SENDBUFF_LEN);
-                memset(data_txt_chunk, 0, chunk_size * sizeof(char));
-                strlcpy(data_txt_chunk, base64_string + offset, chunk_size + 1);
-                ESP_LOGI(TAG, "Allocated string chunk length is %d", strlen(data_txt_chunk));
-                //ESP_LOG_BUFFER_HEXDUMP("Raw data chunk:", data_txt_chunk, strlen(data_txt_chunk)+1, ESP_LOG_DEBUG);
-                if (json_object_set_string(root_object, json_identifier, data_txt_chunk) != JSONSuccess)
-                {
-                    ESP_LOGI(TAG, "Setting json string failed");
-                    free(data_txt_chunk);
-                    json_value_free(root_value);
-                    json_free_serialized_string(json_string);
-                    break;
-                }
-                json_string = json_serialize_to_string(root_value);
-                if (json_string == NULL)
-                {
-                    ESP_LOGI(TAG, "Allocation of json string failed");
-                    free(data_txt_chunk);
-                    json_value_free(root_value);
-                    json_free_serialized_string(json_string);
-                    break;
-                }
-                //ESP_LOG_BUFFER_HEXDUMP("JSON string:", json_string, strlen(json_string)+1, ESP_LOG_DEBUG);
-                connections = cgiWebsockBroadcast(&httpdFreertosInstance.httpdInstance, infared_cgi_resource_string, json_string, strlen(json_string), WEBSOCK_FLAG_NONE);
-                ESP_LOGD(TAG, "Sent chunk %d of raw data size %d of a maximum %d byte raw payload to %d connections", i, chunk_size, strlen(base64_string), connections);
-                ESP_LOGD(TAG, "json data size for this chunk is %d", strlen(json_string));
-                free(data_txt_chunk);
-                json_value_free(root_value);
-                json_free_serialized_string(json_string);
-                size_to_do -= chunk_size; //Subtract the quantity of data already transferred.
-                if (size_to_do < 1024)
-                {
-                    if ((offset + chunk_size) != size)
-                    {
-                        ESP_LOGE(TAG, "Error: Burst size mismatch");
-                    }
-                }
-            }
-            free(base64_string);
+            wsStringBurstBroadcast(base64_camera_string, "CAMERA_CONT", "CAMERA_END");
+            free(base64_camera_string);
         }
         else
         {
@@ -946,6 +951,8 @@ void tagPageWsBroadcastTask(void *pvParameters)
     esp_err_t ret;
     EventBits_t xEventGroupValue;
     EventBits_t xBitstoWaitFor = NOTIFY_WEBSERVER_TAG_INFO_TASK_CLOSE;
+
+    esp_bt_controller_enable(ESP_BT_MODE_BLE);
     /*Set up bluetooth peripheral hardware*/
     esp_eddystone_init();
     /*<! set scan parameters*/
@@ -1297,10 +1304,12 @@ void app_main()
     /*Reboot if unsuccessful*/
     ESP_ERROR_CHECK(ret);
 
+    /*Release memory set aside for clasic BT as we shall not use it*/
     ESP_ERROR_CHECK(esp_bt_controller_mem_release(ESP_BT_MODE_CLASSIC_BT));
+
+    /*Initiallise BT controller*/
     esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
     esp_bt_controller_init(&bt_cfg);
-    esp_bt_controller_enable(ESP_BT_MODE_BLE);
 
     /*Event group for task synchronisation*/
     task_sync_event_group = xEventGroupCreate();

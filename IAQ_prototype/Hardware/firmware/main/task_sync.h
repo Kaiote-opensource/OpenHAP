@@ -1,7 +1,7 @@
 #ifndef _TASK_SYNC_H_
 #define _TASK_SYNC_H_
 
-/*Define events in webserver task sync event group*/
+/*Define bitwise events in task sync event group*/
 #define NOTIFY_WEBSERVER_STATUS_TASK_CLOSE ( 1UL << 0UL )
 #define NOTIFY_WEBSERVER_PARTICULATE_MATTER_TASK_CLOSE ( 1UL << 1UL )
 #define NOTIFY_WEBSERVER_GPIO_INTERRUPT_TASK_CLOSE ( 1UL << 2UL )
