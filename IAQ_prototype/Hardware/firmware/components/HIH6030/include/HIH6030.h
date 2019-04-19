@@ -21,21 +21,23 @@
 #define HIH6030_TEMPERATURE_END_BYTE       2
 #define HIH6030_TEMPERATURE_START_POS      2
 
+
+typedef enum {
+    HIH6030_VALID_DATA = 0,
+    HIH6030_STALE_DATA,
+    HIH6030_COMMAND_MODE,
+} hih6030_status_t;
+
 typedef struct
 {
-    float temperature;
-    float humidity; 
-    uint16_t status;
-
     int address;
     i2c_port_t port;
-
     SemaphoreHandle_t i2c_bus_mutex;
 }HIH6030;
 
-esp_err_t get_temp_humidity(HIH6030* HIH6030_data);
-
 esp_err_t HIH6030_init(HIH6030* HIH6030_inst, int address, i2c_port_t port, SemaphoreHandle_t* bus_mutex);
+
+esp_err_t get_temp_humidity(HIH6030* HIH6030_inst, hih6030_status_t* status, float* temperature_val, float* humidity_val);
 
 /*Only to be used if device is the only one on the i2c bus or for testing*/
 // esp_err_t HIH6030_deinit(i2c_port_t port);
