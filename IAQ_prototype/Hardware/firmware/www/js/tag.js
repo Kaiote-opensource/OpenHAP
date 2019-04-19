@@ -67,17 +67,16 @@ var tag = {
         }
     },
     removeDevice: function () {
-
-        for (let index = 0; index < this.value.length; index++) {
-            const element = this.value[index];
-            var t1 = _kaiote_handler.currentTime()
-            var t2 =  element.LAST_CHECK 
-            var difference = _kaiote_handler.getTimeDifference(t1, t2)
-            if (difference > 30) {
-                this.value.splice(index, 1)
-                continue;
-            }
-        }
+        // for (let index = 0; index < this.value.length; index++) {
+        //     const element = this.value[index];
+        //     var t1 = _kaiote_handler.currentTime()
+        //     var t2 =  element.LAST_CHECK 
+        //     var difference = _kaiote_handler.getTimeDifference(t1, t2)
+        //     if (difference > 10) {
+        //         this.value.splice(index, 1)
+        //         continue;
+        //     }
+        // }
     },
     findDevice: function (id) {
         for (let index = 0; index < this.value.length; index++) {
@@ -97,7 +96,8 @@ var tag = {
             const element = this.value[index];
             if (element.MAC == device.MAC) {
                 this.value[index] = device
-                var found = 1
+                found = 1
+                console.log('found')
                 break;
             }
         }
@@ -140,6 +140,7 @@ var socket = {
     },
     onMessage: function (evt) {
         var response = JSON.parse(evt)
+
         response.LAST_CHECK = _kaiote_handler.currentTime()
         tag.addDevice(response)
         tag.removeDevice()
