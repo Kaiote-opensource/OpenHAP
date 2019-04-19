@@ -472,23 +472,11 @@ static void myInfaredWebsocketClose(Websock *ws)
 static void myTagWebsocketClose(Websock *ws)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
-    esp_err_t ret;
     int connections = cgiWebsockBroadcast(&httpdFreertosInstance.httpdInstance, tag_cgi_resource_string, null_test_string, strlen(null_test_string), WEBSOCK_FLAG_NONE);
     ESP_LOGI(TAG, "Tag info page connection close received, Previous connections were %d", connections);
 
     if (connections == 1)
     {
-        if((ret = esp_eddystone_deinit()) != ESP_OK)
-        {
-            ESP_LOGE(TAG, "Eddystone deinitialise failed, returned %d", ret);
-        }
-        ESP_LOGI(TAG, "Eddystone deinitialised succesfully");
-/*        if((ret = esp_bt_controller_disable()) != ESP_OK)
-        {
-            ESP_LOGE(TAG, "Bluetooth controller disable failed, returned %d", ret);
-        }
-        ESP_LOGI(TAG, "Bluetooth controller disabled succesfully");
-*/        
         xEventGroupSetBits(task_sync_event_group,  NOTIFY_WEBSERVER_TAG_INFO_TASK_CLOSE);      
     }
 }
@@ -876,7 +864,9 @@ void infaredPageWsBroadcastTask(void *pvParameters)
         if(ret != ESP_OK)
         {
             ESP_LOGE(TAG, "Failed to get thermal image, returned error code %d", ret);
-            //Do something
+            //Display Zeroed out image buffer to signify that there is an error.
+            image_buffer = {0}
+            //Do something else
         }
         base64_string = b64_encode_thermal_img(base64_string, image_buffer/*camera_data_float*/);
 
@@ -953,7 +943,7 @@ void infaredPageWsBroadcastTask(void *pvParameters)
 void tagPageWsBroadcastTask(void *pvParameters)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
-
+    esp_err_t ret;
     EventBits_t xEventGroupValue;
     EventBits_t xBitstoWaitFor = NOTIFY_WEBSERVER_TAG_INFO_TASK_CLOSE;
     /*Set up bluetooth peripheral hardware*/
@@ -967,6 +957,18 @@ void tagPageWsBroadcastTask(void *pvParameters)
         if(xEventGroupValue & xBitstoWaitFor)
         {
             //Let task finish up cleanly
+            if((ret = esp_eddystone_deinit()) != ESP_OK)
+            {
+                ESP_LOGE(TAG, "Eddystone deinitialise failed, returned %d", ret);
+            }
+            ESP_LOGI(TAG, "Eddystone deinitialised succesfully");
+
+            if((ret = esp_bt_controller_disable()) != ESP_OK)
+            {
+                ESP_LOGE(TAG, "Bluetooth controller disable failed, returned %d", ret);
+            }
+            ESP_LOGI(TAG, "Bluetooth controller disabled succesfully");
+
             xTagBroadcastHandle = NULL; 
             vTaskDelete(NULL);
         }
