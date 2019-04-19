@@ -21,16 +21,17 @@
 #include "esp_spi_flash.h"
 
 #include "mbedtls/base64.h"
-#include "parson.h"
+
+#include "espfs.h"
+#include "espfs_image.h"
+#include "libesphttpd/httpd-espfs.h"
+
 #include <libesphttpd/esp.h>
 #include "libesphttpd/httpd.h"
-#include "libesphttpd/httpdespfs.h"
 #include "libesphttpd/cgiwifi.h"
 #include "libesphttpd/cgiflash.h"
 #include "libesphttpd/auth.h"
-#include "libesphttpd/espfs.h"
 #include "libesphttpd/captdns.h"
-#include "libesphttpd/webpages-espfs.h"
 #include "libesphttpd/cgiwebsocket.h"
 #include "libesphttpd/httpd-freertos.h"
 #include "libesphttpd/route.h"
@@ -55,6 +56,7 @@
 #include <MLX90640_API.h>
 #include "MLX90640_I2C_Driver.h"
 #include "adc_sense.h"
+#include "parson.h"
 
 #include "task_sync.h"
 
@@ -239,7 +241,7 @@ static void esp_eddystone_show_inform(const esp_eddystone_result_t *res, const e
     {
     case EDDYSTONE_FRAME_TYPE_TLM:
     {
-        sprintf(mac_buffer, "%02x%02x%02x%02x%02x%02x", scan_result->scan_rst.bda[0],
+        sprintf(mac_buffer, "%02X%02X%02X%02X%02X%02X", scan_result->scan_rst.bda[0],
                                                         scan_result->scan_rst.bda[1],
                                                         scan_result->scan_rst.bda[2],
                                                         scan_result->scan_rst.bda[3],
@@ -656,8 +658,8 @@ char *simulateStatusValues(char *status_string, peripherals_struct *device_perip
     /*Get particulate matter reading from queue*/
     if(particulate_readings_queue != 0 )
     {
-        // Receive a message from the queue. Dont block if there are no particulate readings in queue.
-        if( xQueueReceive(particulate_readings_queue, &PM_2_5, 0) )
+        // Receive a message from the queue. Block for 1000ms if there are no particulate readings in queue, such as at startup.
+        if( xQueueReceive(particulate_readings_queue, &PM_2_5, 1000/portTICK_RATE_MS) )
         {
             json_object_set_number(root_object, "PM25", PM_2_5);
         }
@@ -668,7 +670,7 @@ char *simulateStatusValues(char *status_string, peripherals_struct *device_perip
         ESP_LOGE(TAG, "Particulate matter queue not created! Cant receive readings, PM 2.5 json not created");
     }
     //json_object_set_number(root_object, "TIME", rand()%100);
-    json_object_set_number(root_object, "RTC_BATT", rand() % 100);
+    json_object_set_number(root_object, "RTC_BATT", (int)((battery_level/3300)*100));
     //json_object_set_number(root_object, "MAIN_BATT", rand()%100);
     json_object_set_number(root_object, "DEVICE_TIME", mktime(&date_time)/*unix_time*/);
     json_object_set_string(root_object, "SD_CARD", cd_level == TCA9534_HIGH ? "DISCONNECTED" : "CONNECTED");
@@ -1221,7 +1223,7 @@ void webServerTask(void *pvParameters)
     /*Allocate this connection memory to psram*/
     connectionMemory = (char*)malloc(sizeof(RtosConnType) * MAX_CONNECTIONS);
 
-    espFsInit((void *)(webpages_espfs_start));
+    espFsInit((void *)(image_espfs_start));
 
     tcpip_adapter_init();
 
