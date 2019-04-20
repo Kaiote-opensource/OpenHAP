@@ -270,6 +270,7 @@ static void esp_eddystone_show_inform(const esp_eddystone_result_t *res, const e
         break;
     }
     default:
+        ESP_LOGD(TAG, "Other frame type received");
         break;
     }
 }
@@ -279,12 +280,25 @@ static void esp_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *par
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
     esp_err_t err;
 
+    EventBits_t xEventGroupValue = xEventGroupWaitBits(task_sync_event_group, NOTIFY_BT_CALLBACK_DONE, pdFALSE, pdFALSE, 0); 
+
+    if(xEventGroupValue & NOTIFY_BT_CALLBACK_DONE)
+    {
+        /*This function is not meant to be re-entrant once done in the event of a tag info task close signal! Just return*/
+        ESP_LOGI(TAG, "GAP callback completed and not re-entrant on tag info close signal, returning...");
+        return;
+    } 
+
     switch (event)
     {
     case ESP_GAP_BLE_SCAN_PARAM_SET_COMPLETE_EVT:
     {
         uint32_t duration = 0;
-        esp_ble_gap_start_scanning(duration);
+        err = esp_ble_gap_start_scanning(duration);
+        if(err != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Scanning returned error!");
+        }
         break;
     }
     case ESP_GAP_BLE_SCAN_START_COMPLETE_EVT:
@@ -322,6 +336,14 @@ static void esp_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *par
                 // For example, just print them:
                 esp_eddystone_show_inform(&eddystone_res, scan_result);
             }
+                /*Dont toggle bit representing notification that the tag info task is meant to close, just close cleanly and set own bit, preventing callback re-entry*/
+            EventBits_t xEventGroupValue2 = xEventGroupWaitBits(task_sync_event_group, NOTIFY_WEBSERVER_TAG_INFO_TASK_CLOSE, pdFALSE, pdFALSE, 0); 
+
+            if(xEventGroupValue2 & NOTIFY_WEBSERVER_TAG_INFO_TASK_CLOSE)
+            {
+                ESP_LOGI(TAG, "Tag info close signal received, setting eventgroup bit to show GAP callback has exited...");
+                xEventGroupSetBits(task_sync_event_group, NOTIFY_BT_CALLBACK_DONE);
+            } 
             break;
         }
         default:
@@ -342,6 +364,7 @@ static void esp_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *par
         break;
     }
     default:
+        ESP_LOGE(TAG, "Other callback command received");
         break;
     }
 }
@@ -492,7 +515,7 @@ static void myStatusWebsocketConnect(Websock *ws)
 
     if (connections == 0)
     {
-        if (xTaskCreate(statusPageWsBroadcastTask, "statusPageTask", 8192, NULL, 2, &xStatusBroadcastHandle))
+        if (xTaskCreatePinnedToCore(statusPageWsBroadcastTask, "statusPageTask", 8192, NULL, 2, &xStatusBroadcastHandle,1))
         {
             ESP_LOGI(TAG, "Created status broadcast task");
             ws->recvCb = myWebsocketRecv;
@@ -519,7 +542,7 @@ static void myInfaredWebsocketConnect(Websock *ws)
 
     if (connections == 0)
     {
-        if (xTaskCreatePinnedToCore(infaredPageWsBroadcastTask, "infaredPageTask", 24000, NULL, 2, &xInfaredBroadcastHandle, 0))
+        if (xTaskCreatePinnedToCore(infaredPageWsBroadcastTask, "infaredPageTask", 24000, NULL, 2, &xInfaredBroadcastHandle, 1))
         {
             ESP_LOGI(TAG, "Created infared broadcast task");
             ws->recvCb = myWebsocketRecv;
@@ -546,7 +569,7 @@ static void myTagWebsocketConnect(Websock *ws)
 
     if (connections == 0)
     {
-        if (xTaskCreatePinnedToCore(tagPageWsBroadcastTask, "tagPageTask", 2048, NULL, 2, &xTagBroadcastHandle, 0))
+        if (xTaskCreatePinnedToCore(tagPageWsBroadcastTask, "tagPageTask", 2048, NULL, 2, &xTagBroadcastHandle, 1))
         {
             ESP_LOGI(TAG, "Created tag info broadcast task");
             ws->recvCb = myWebsocketRecv;
@@ -818,24 +841,37 @@ void statusPageWsBroadcastTask(void *pvParameters)
     {
 
         status_string = simulateStatusValues(status_string, &device_peripherals);
-        if (status_string != NULL)
-        {
-            connections = cgiWebsockBroadcast(&httpdFreertosInstance.httpdInstance, status_cgi_resource_string, status_string, strlen(status_string), WEBSOCK_FLAG_NONE);
-            json_free_serialized_string(status_string);
-            ESP_LOGD(TAG, "Broadcast sent to %d connections", connections);
-        }
-        else
-        {
-            ESP_LOGE(TAG, "Status page JSON assembler returned NULL");
-        }
 
         xEventGroupValue = xEventGroupWaitBits(task_sync_event_group, xBitstoWaitFor, pdTRUE, pdFALSE, 0); 
 
-        if(xEventGroupValue & xBitstoWaitFor)
+        if (status_string != NULL)
         {
-            //Let task finish up cleanly
-            xStatusBroadcastHandle = NULL;
-            vTaskDelete(NULL);
+            if(xEventGroupValue & xBitstoWaitFor)
+            {
+                //Let task finish up cleanly
+                json_free_serialized_string(status_string);
+                xStatusBroadcastHandle = NULL;
+                vTaskDelete(NULL);
+            }
+            else
+            {
+                connections = cgiWebsockBroadcast(&httpdFreertosInstance.httpdInstance, status_cgi_resource_string, status_string, strlen(status_string), WEBSOCK_FLAG_NONE);
+                json_free_serialized_string(status_string);
+                ESP_LOGD(TAG, "Broadcast sent to %d connections", connections);
+            }
+        }
+        else
+        {
+            if(xEventGroupValue & xBitstoWaitFor)
+            {
+                //Let task finish up cleanly
+                xStatusBroadcastHandle = NULL;
+                vTaskDelete(NULL);
+            }
+            else
+            {
+                ESP_LOGE(TAG, "Status page JSON assembler returned NULL");
+            }
         }
         vTaskDelay(1000 / portTICK_RATE_MS);
     }
@@ -922,26 +958,39 @@ void infaredPageWsBroadcastTask(void *pvParameters)
             //Do something else
         }
         base64_camera_string = b64_encode_thermal_img(base64_camera_string, image_buffer/*camera_data_float*/);
-
+    
+        xEventGroupValue = xEventGroupWaitBits(task_sync_event_group, xBitstoWaitFor, pdTRUE, pdFALSE, 0);
+    
         if (base64_camera_string != NULL)
-        {
-            //ESP_LOG_BUFFER_HEXDUMP("Base64 data:", base64_string, strlen(base64_string)+1, ESP_LOG_DEBUG);
-            wsStringBurstBroadcast(base64_camera_string, "CAMERA_CONT", "CAMERA_END");
-            free(base64_camera_string);
+        { 
+
+            if(xEventGroupValue & xBitstoWaitFor)
+            {
+                //Let task finish up cleanly
+                free(base64_camera_string);
+                xInfaredBroadcastHandle = NULL;
+                vTaskDelete(NULL);
+            }
+            else
+            {
+                //ESP_LOG_BUFFER_HEXDUMP("Base64 data:", base64_string, strlen(base64_string)+1, ESP_LOG_DEBUG);
+                wsStringBurstBroadcast(base64_camera_string, "CAMERA_CONT", "CAMERA_END");
+                free(base64_camera_string);
+            }
         }
         else
         {
-            ESP_LOGD(TAG, "Infared page JSON assembler returned NULL");
+            if(xEventGroupValue & xBitstoWaitFor)
+            {
+                xInfaredBroadcastHandle = NULL;
+                vTaskDelete(NULL);
+            }
+            else
+            {
+                ESP_LOGD(TAG, "Infared page JSON assembler returned NULL");
+            }
         }
 
-        xEventGroupValue = xEventGroupWaitBits(task_sync_event_group, xBitstoWaitFor, pdTRUE, pdFALSE, 0); 
-
-        if(xEventGroupValue & xBitstoWaitFor)
-        {
-            //Let task finish up cleanly
-            xInfaredBroadcastHandle = NULL;
-            vTaskDelete(NULL);
-        }
         vTaskDelay(1000 / portTICK_RATE_MS);
     }
     vTaskDelete(NULL);
@@ -952,7 +1001,7 @@ void tagPageWsBroadcastTask(void *pvParameters)
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
     esp_err_t ret;
     EventBits_t xEventGroupValue;
-    EventBits_t xBitstoWaitFor = NOTIFY_WEBSERVER_TAG_INFO_TASK_CLOSE;
+    EventBits_t xBitstoWaitFor = NOTIFY_WEBSERVER_TAG_INFO_TASK_CLOSE | NOTIFY_BT_CALLBACK_DONE;
 
     esp_bt_controller_enable(ESP_BT_MODE_BLE);
     /*Set up bluetooth peripheral hardware*/
@@ -961,10 +1010,12 @@ void tagPageWsBroadcastTask(void *pvParameters)
     esp_ble_gap_set_scan_params(&ble_scan_params);
     while(1)
     {
-        xEventGroupValue = xEventGroupWaitBits(task_sync_event_group, xBitstoWaitFor, pdTRUE, pdFALSE, 0); 
+        /*Wait for both the task close signal and the signal that the BLE GAP callback has completed, and clear the bits*/
+        xEventGroupValue = xEventGroupWaitBits(task_sync_event_group, xBitstoWaitFor, pdTRUE, pdTRUE, 0); 
 
-        if(xEventGroupValue & xBitstoWaitFor)
+        if((xEventGroupValue & xBitstoWaitFor) == xBitstoWaitFor)
         {
+            ESP_LOGI(TAG, "Task close signal received and BLE GAP callback has completed cleanly");
             //Let task finish up cleanly
             if((ret = esp_eddystone_deinit()) != ESP_OK)
             {
@@ -1317,7 +1368,7 @@ void app_main()
     task_sync_event_group = xEventGroupCreate();
 
     /*This should Same priority as the bluetooth task, but we will set the antenna access prioritisation in ESP-IDF, of the two*/
-    xTaskCreatePinnedToCore(webServerTask, "webServerTask", 4096, NULL, 10, &xWebServerTaskHandle, 0);
+    xTaskCreate(webServerTask, "webServerTask", 4096, NULL, 10, &xWebServerTaskHandle);
 
     while (1)
     {
