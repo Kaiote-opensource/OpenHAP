@@ -435,27 +435,9 @@ static esp_err_t powerOnSelfTest(void)
     return ESP_OK;
 }
 
-//Queue all commands from all websockets and have a single decoding handler to avoid race conditions
 static void myWebsocketRecv(Websock *ws, char *data, int len, int flags)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
-
-// typedef struct
-// {
-//     Websock* ws;
-//     char* command;
-//     union
-//     {
-//         int32_t* signed_value;
-//         uint32_t* unsigned_value;
-//         float* float_value;
-//         double* double_value;
-//     }value;
-//     char* uid;
-//     char* return_code_string;
-// } user_command;
-
-    //user_command my_command;
 
     char* value_search_string;
     char* uid_search_string;
@@ -482,53 +464,46 @@ static void myWebsocketRecv(Websock *ws, char *data, int len, int flags)
             /*Search for the first valid command string...discard any else*/
             if(json_object_has_value(root_object, user_commands[i]))
             {
-                /*Allocate from the heap and pass by reference to avoid referencing automatic variables on this stack, when function returns*/
-                //my_command = (user_command*)malloc(sizeof(user_command));
-                /*Zero out the allocated struct*/
-                //memset(my_command, 0, sizeof(my_command));
-                //my_command.ws = ws;
-                //my_command.command = user_commands[i];
-
                 ESP_LOGI(TAG, "Found command %s", user_commands[i]);
                 if(strcmp(user_commands[i], "SET_TIME") == 0)
                 {
                     asprintf(&value_search_string, "%s.VALUE", user_commands[i]);
-                    ESP_LOGI(TAG, "Searching for %s...", value_search_string);
+                    ESP_LOGD(TAG, "Searching for %s...", value_search_string);
                     time_t unix_time = (uint32_t)json_object_dotget_number(root_object, value_search_string);
-                    ESP_LOGI(TAG, "Found %s as %ul", value_search_string, (unsigned int)unix_time);
+                    ESP_LOGD(TAG, "Found %s as %ul", value_search_string, (unsigned int)unix_time);
                     //command.value.unsigned_value = (uint32_t)json_object_dotget_number(root_object, value_search_string);
                     asprintf(&uid_search_string, "%s.UID", user_commands[i]);
-                    ESP_LOGI(TAG, "Searching for %s...", uid_search_string);
-                    ESP_LOGI(TAG, "Found %s as %s", value_search_string, json_object_dotget_string(root_object, uid_search_string));
-                    //command.uid = json_object_dotget_string(root_object, value_search_string);
-                    //xQueueSend(workqueue, user_command, 100/portTICK_RATE_MS);
+                    ESP_LOGD(TAG, "Searching for %s...", uid_search_string);
+                    ESP_LOGD(TAG, "Found %s as %s", value_search_string, json_object_dotget_string(root_object, uid_search_string));
                     localtime_r(&unix_time, &date_time);
-
                     if(ds3231_set_time(&(device_peripherals.IAQ_DS3231), &date_time) == ESP_OK)
                     {
+                        ESP_LOGI(TAG, "Successfully set device time");
                         if(json_object_dotremove(root_object, value_search_string) == JSONSuccess)
                         {
+                            ESP_LOGI(TAG, "Successfully created command feedback message");
                             sanitised_json_string = json_serialize_to_string(root_value);
                             ESP_LOGI(TAG, "Json response to client %s", sanitised_json_string);
                             cgiWebsocketSend(&httpdFreertosInstance.httpdInstance, ws, sanitised_json_string, strlen(sanitised_json_string), WEBSOCK_FLAG_NONE);
                         }
                     }
+                    else
+                    {
+                        ESP_LOGE(TAG, "Could not set device time at this time, try again!");
+                    }       
                     free(value_search_string);
                     free(uid_search_string);
                     json_free_serialized_string(sanitised_json_string);
                 }
-                //cgiWebsocketSend(&httpdFreertosInstance.httpdInstance, ws, status_handshake_msg, strlen(status_handshake_msg), WEBSOCK_FLAG_NONE);
             }
         }
-        return;
     }
     else
     {
         ESP_LOGE(TAG, "Parse string returned error!");
         /*Add error handling here*/
-        return;
     }
-    
+    return;
 }
 
 /*Websocket disconnected. Stop task if none connected*/
@@ -541,7 +516,6 @@ static void myStatusWebsocketClose(Websock *ws)
     if (connections == 1)
     {
         xEventGroupSetBits( task_sync_event_group,  NOTIFY_WEBSERVER_STATUS_TASK_CLOSE |
-                                                    NOTIFY_WEBSERVER_PARTICULATE_MATTER_TASK_CLOSE |
                                                     NOTIFY_WEBSERVER_GPIO_INTERRUPT_TASK_CLOSE);      
     }
 }
@@ -747,7 +721,7 @@ char *simulateStatusValues(char *status_string, peripherals_struct *device_perip
     /*Get particulate matter reading from queue*/
     if(particulate_readings_queue != 0 )
     {
-        // Receive a message from the queue. Block for 1000ms if there are no particulate readings in queue, such as at startup.
+        // Receive a message from the queue or block for 1000ms if there are no particulate readings in queue, such as at startup.
         if( xQueueReceive(particulate_readings_queue, &PM_2_5, 1000/portTICK_RATE_MS) )
         {
             json_object_set_number(root_object, "PM25", PM_2_5);
@@ -918,6 +892,9 @@ void statusPageWsBroadcastTask(void *pvParameters)
                 //Let task finish up cleanly
                 json_free_serialized_string(status_string);
                 xStatusBroadcastHandle = NULL;
+                /*As we depend on the reference PM 2.5 value passed from the PM sensor handler, we would like to complete dereferecing its reference first from
+                the queue otherwise a race condition occurs as both would close non-deterministically causing undefined behaviour*/
+                xEventGroupSetBits(task_sync_event_group, NOTIFY_WEBSERVER_PARTICULATE_MATTER_TASK_CLOSE);
                 vTaskDelete(NULL);
             }
             else
@@ -1179,6 +1156,8 @@ void ICACHE_FLASH_ATTR init_wifi(void)
     esp_wifi_set_config(WIFI_IF_AP, &ap_config);
 
     ESP_ERROR_CHECK(esp_wifi_start());
+    free(ssid);
+    free(password);
 }
 
 esp_err_t setupTempHumiditySensor(HIH6030 *HIH6030_inst, SemaphoreHandle_t *bus_mutex)
@@ -1204,16 +1183,6 @@ esp_err_t setupRTC(DS3231 *DS3231_inst, SemaphoreHandle_t *bus_mutex)
     setenv("TZ", "EAT-3", 1);
     tzset();
 
-    /*time_t now = 1555427390;
-    // setup datetime: 2016-10-09 13:50:10
-    localtime_r(&now, &date_time);
-
-    while (ds3231_set_time(DS3231_inst, &date_time) != ESP_OK)
-    {
-        ESP_LOGI(TAG, "Could not set time\n");
-        vTaskDelay(250 / portTICK_PERIOD_MS);
-    }
-    */
     return ret;
 }
 esp_err_t setupGpioExpander(TCA9534 *TCA9534_inst, SemaphoreHandle_t *bus_mutex)
