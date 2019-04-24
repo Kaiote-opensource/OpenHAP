@@ -87,7 +87,7 @@ var tag = {
     },
     addDevice: function (device) {
         var found = 0
-
+        lib.remove('devices', 0)
         for (let index = 0; index < this.value().length; index++) {
             const element = this.value()[index];
             console.log(element)
