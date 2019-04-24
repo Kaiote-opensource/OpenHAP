@@ -168,7 +168,7 @@ var socket = {
         tag.addDevice(response)
         // tag.removeDevice()
         tag.displayAllDevices()
-        // tag.getDistanceSeverity(response)
+        tag.getDistanceSeverity(response)
 
         if (response.MAC = tag.selectedDevice) {
             var audio = new Audio('./resources/notification.mp3')
