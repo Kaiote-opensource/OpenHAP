@@ -25,6 +25,16 @@ typedef struct
 /*Assumes 8N1 message format from datasheet*/
 esp_err_t setup_particulate_sensor(ZH03* ZH03_inst, uart_port_t uart_num, int baudrate, int txd_pin, int rxd_pin);
 
-esp_err_t get_particulate_reading(ZH03* ZH03_inst, int32_t* PM_1, int32_t* PM_2_5, int32_t* PM_10);
+esp_err_t set_QA_mode(ZH03* ZH03_inst);
+
+esp_err_t set_initiative_upload_mode(ZH03* ZH03_inst);
+
+esp_err_t set_dormant_mode(ZH03* ZH03_inst);
+
+esp_err_t unset_dormant_mode(ZH03* ZH03_inst);
+
+esp_err_t get_particulate_reading_initiative_upload_mode(ZH03* ZH03_inst, int32_t* PM_1, int32_t* PM_2_5, int32_t* PM_10);
+
+esp_err_t get_particulate_reading_QA_mode(ZH03* ZH03_inst, int32_t* PM_1, int32_t* PM_2_5, int32_t* PM_10);
 
 #endif

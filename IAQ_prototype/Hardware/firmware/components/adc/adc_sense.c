@@ -14,7 +14,7 @@ static const adc1_channel_t channel = ADC1_CHANNEL_6;     //GPIO34 with ADC1
 static esp_adc_cal_characteristics_t *adc_chars;
 static const adc_unit_t unit = ADC_UNIT_1;
 static const int averaging_samples = 64;
-static const adc_atten_t atten = ADC_ATTEN_DB_0;
+static const adc_atten_t atten = ADC_ATTEN_DB_6;
 static const uint32_t default_vref = 1100;
 
 static void check_efuse()

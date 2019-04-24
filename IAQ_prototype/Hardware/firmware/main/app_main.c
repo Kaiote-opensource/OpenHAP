@@ -61,6 +61,7 @@
 
 #include "task_sync.h"
 
+#include "esp_sleep.h"
 #include "esp_system.h"
 #include "sdkconfig.h"
 
@@ -78,7 +79,7 @@
 
 
 #define WEB_PORT 80U
-#define MAX_CONNECTIONS 32U /*Maximum tabs open*/
+#define MAX_CONNECTIONS 12U /*Maximum tabs open*/
 
 #define GPIO_TCA9534_INT     35
 
@@ -130,10 +131,8 @@ static TaskHandle_t xWebServerTaskHandle = NULL;
 static TaskHandle_t xDataloggerTaskHandle = NULL;
 /*Webserver subtask handles - 1 per page*/
 
-static TaskHandle_t xuartSensorTaskHandle = NULL;
 static TaskHandle_t xStatusBroadcastHandle = NULL;
 static TaskHandle_t xInfaredBroadcastHandle = NULL;
-static TaskHandle_t xTCA9534HandlerTaskHandle = NULL;
 static TaskHandle_t xTagBroadcastHandle = NULL;
 
 typedef struct
@@ -164,15 +163,10 @@ static EventGroupHandle_t wifi_ap_event_group;
 /*Task synchronisation event group*/
 static EventGroupHandle_t task_sync_event_group = NULL;
 
-static xQueueHandle gpio_evt_queue = NULL;
-static xQueueHandle particulate_readings_queue = NULL;
-static xQueueHandle workqueue = NULL;
-
 /* declare static functions */
 static void esp_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param);
 static void esp_eddystone_show_inform(const esp_eddystone_result_t *res, const esp_ble_gap_cb_param_t *scan_result);
 
-void uartSensorTask(void *pvParameters);
 void statusPageWsBroadcastTask(void *pvParameters);
 void infaredPageWsBroadcastTask(void *pvParameters);
 void tagPageWsBroadcastTask(void *pvParameters);
@@ -186,67 +180,6 @@ static esp_ble_scan_params_t ble_scan_params =
     .scan_window = 0x30,
     .scan_duplicate = BLE_SCAN_DUPLICATE_DISABLE
 };
-
-static void IRAM_ATTR TCA9534_isr_handler(void *arg)
-{
-    uint32_t gpio_num = (uint32_t)arg;
-    xQueueSendFromISR(gpio_evt_queue, &gpio_num, NULL);
-}
-
-void TCA9534HandlerTask(void *pvParameters)
-{
-    ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
-    int32_t wp_level = 0;
-    int32_t cd_level = 0;
-    uint32_t io_num;
-
-    EventBits_t xEventGroupValue;
-    EventBits_t xBitstoWaitFor = NOTIFY_WEBSERVER_GPIO_INTERRUPT_TASK_CLOSE;
-
-    TCA9534_get_level(&(device_peripherals.IAQ_TCA9534), TCA9534_SD_CD, &cd_level);
-    TCA9534_get_level(&(device_peripherals.IAQ_TCA9534), TCA9534_SD_WP, &wp_level);
-    TCA9534_set_level(&(device_peripherals.IAQ_TCA9534), TCA9534_WARN_LED, !cd_level);
-
-    while (1)
-    {
-        if (xQueueReceive(gpio_evt_queue, &io_num, portMAX_DELAY))
-        {
-            if (io_num == GPIO_TCA9534_INT)
-            {
-                /*Delay added to ignore any bouncing on the mechanical parts generating the interrupt*/
-                vTaskDelay(100 / portTICK_PERIOD_MS);
-
-                ESP_LOGI(TAG,"TCA9534 interrupt received");
-                if (TCA9534_get_level(&(device_peripherals.IAQ_TCA9534), TCA9534_SD_CD, &cd_level) != ESP_OK)
-                {
-                    ESP_LOGE(TAG,"Error getting card detect level");
-                }
-                else
-                {
-                    ESP_LOGI(TAG,"CD level is set to %d", (int)cd_level);
-                    TCA9534_set_level(&(device_peripherals.IAQ_TCA9534), TCA9534_WARN_LED, !cd_level);
-                }
-
-                if (TCA9534_get_level(&(device_peripherals.IAQ_TCA9534), TCA9534_SD_WP, &wp_level) != ESP_OK)
-                {
-                    ESP_LOGE(TAG,"Error getting Write protect level");
-                }
-                else
-                {
-                    ESP_LOGI(TAG,"Write protect is set to %d", (int)wp_level);
-                }
-            }
-        }
-        xEventGroupValue = xEventGroupWaitBits(task_sync_event_group, xBitstoWaitFor, pdTRUE, pdFALSE, 0); 
-
-        if(xEventGroupValue & xBitstoWaitFor)
-        {
-            //Let task finish up cleanly
-            xTCA9534HandlerTaskHandle = NULL;
-            vTaskDelete(NULL);
-        }
-    }
-}
 
 static void esp_eddystone_show_inform(const esp_eddystone_result_t *res, const esp_ble_gap_cb_param_t *scan_result)
 {
@@ -336,7 +269,7 @@ static void esp_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *par
             esp_err_t ret = esp_eddystone_decode(scan_result->scan_rst.ble_adv, scan_result->scan_rst.adv_data_len, &eddystone_res);
             if (ret)
             {
-                ESP_LOGI(TAG, "The received data is not an eddystone frame packet or a correct eddystone frame packet.");
+                //ESP_LOGI(TAG, "The received data is not an eddystone frame packet or a correct eddystone frame packet.");
                 // error:The received data is not an eddystone frame packet or a correct eddystone frame packet.
                 // just return
                 return;
@@ -427,14 +360,6 @@ esp_err_t esp_eddystone_app_register(void)
 //     return ret;
 // }
 
-static esp_err_t powerOnSelfTest(void)
-{
-    ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
-    /*Test peripherals that can't be auto detected in software such as LEDs and buzzer*/
-    /*Warn LED*/
-    return ESP_OK;
-}
-
 static void myWebsocketRecv(Websock *ws, char *data, int len, int flags)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
@@ -444,7 +369,6 @@ static void myWebsocketRecv(Websock *ws, char *data, int len, int flags)
     char* sanitised_json_string = NULL;
     JSON_Value *root_value = NULL;
     JSON_Object * root_object = NULL;
-    JSON_Object * command_object = NULL;
     root_value = json_parse_string(data);
     if(root_value != NULL)
     {
@@ -515,8 +439,7 @@ static void myStatusWebsocketClose(Websock *ws)
 
     if (connections == 1)
     {
-        xEventGroupSetBits( task_sync_event_group,  NOTIFY_WEBSERVER_STATUS_TASK_CLOSE |
-                                                    NOTIFY_WEBSERVER_GPIO_INTERRUPT_TASK_CLOSE);      
+        xEventGroupSetBits( task_sync_event_group,  NOTIFY_WEBSERVER_STATUS_TASK_CLOSE);      
     }
 }
 
@@ -689,11 +612,9 @@ char *simulateStatusValues(char *status_string, peripherals_struct *device_perip
 
     int32_t cd_level;
     uint32_t battery_level;
-
     hih6030_status_t status;
     float temperature;
     float humidity;
-    
     int32_t PM_2_5;
 
     /*Query time from DS3231 RTC*/
@@ -717,36 +638,22 @@ char *simulateStatusValues(char *status_string, peripherals_struct *device_perip
     JSON_Object *root_object = json_value_get_object(root_value);
     json_object_set_number(root_object, "HUM", (int)(humidity));
     json_object_set_number(root_object, "TEMP",/*temp*/(int)(temperature));
-
-    /*Get particulate matter reading from queue*/
-    if(particulate_readings_queue != 0 )
+    if(get_particulate_reading_QA_mode(&(device_peripherals->IAQ_ZH03), NULL, &PM_2_5, NULL)==ESP_OK)
     {
-        // Receive a message from the queue or block for 1000ms if there are no particulate readings in queue, such as at startup.
-        if( xQueueReceive(particulate_readings_queue, &PM_2_5, 1000/portTICK_RATE_MS) )
-        {
-            json_object_set_number(root_object, "PM25", PM_2_5);
-        }
+        json_object_set_number(root_object, "PM25", PM_2_5);
     }
-    else
-    {
-        /* code */
-        ESP_LOGE(TAG, "Particulate matter queue not created! Cant receive readings, PM 2.5 json not created");
-    }
-    //json_object_set_number(root_object, "TIME", rand()%100);
-    json_object_set_number(root_object, "RTC_BATT", (int)((battery_level/3300)*100));
-    //json_object_set_number(root_object, "MAIN_BATT", rand()%100);
-    json_object_set_number(root_object, "DEVICE_TIME", mktime(&date_time)/*unix_time*/);
+    json_object_set_number(root_object, "RTC_BATT", (int)(((battery_level*2)/30)));
+    json_object_set_number(root_object, "DEVICE_TIME", mktime(&date_time));
     json_object_set_string(root_object, "SD_CARD", cd_level == TCA9534_HIGH ? "DISCONNECTED" : "CONNECTED");
     status_string = json_serialize_to_string(root_value);
-    ESP_LOGI(TAG, "%s", status_string);
+    ESP_LOGD(TAG, "%s", status_string);
     json_value_free(root_value);
-
     ESP_LOGI(TAG, "status string length is %d bytes", strlen(status_string));
 
     return status_string;
 }
 
-char *b64_encode_thermal_img(char *base64_dst, float *data)
+char* b64_encode_thermal_img(char *base64_dst, float *data)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
     int ret;
@@ -759,14 +666,12 @@ char *b64_encode_thermal_img(char *base64_dst, float *data)
         base64_dst = (char *)malloc((base64_length * sizeof(size_t)) + 1);
     }
     else if (ret == MBEDTLS_ERR_BASE64_INVALID_CHARACTER)
-            {
+    {
         ESP_LOGI(TAG, "Buffer for allocation of infared is too small, length needed is %d bytes", base64_length);
         ESP_LOGI(TAG, "Invalid character found");
+        return NULL;
     }
-    else
-    {
-        ESP_LOGI(TAG, "Function returned succesful");
-    }
+    ESP_LOGI(TAG, "Function returned succesful");
     base64_dst = (char *)malloc((base64_length * sizeof(size_t)) + 1);
     ret = mbedtls_base64_encode((unsigned char *)base64_dst, base64_length, &base64_length, (unsigned char *)data, 768 * sizeof(float));
     if (ret == MBEDTLS_ERR_BASE64_BUFFER_TOO_SMALL)
@@ -785,69 +690,6 @@ char *b64_encode_thermal_img(char *base64_dst, float *data)
     return base64_dst;
 }
 
-void uartSensorTask(void *pvParameters)
-{
-    esp_err_t ret;
-    int32_t PM_2_5;
-
-    EventBits_t xEventGroupValue;
-    EventBits_t xBitstoWaitFor = NOTIFY_WEBSERVER_PARTICULATE_MATTER_TASK_CLOSE;
-
-    /*Allocate queue that can hold upto 5 particulate matter readings*/
-    particulate_readings_queue = xQueueCreate(5, sizeof(int32_t));
-
-    if(particulate_readings_queue == 0)
-    {
-        ESP_LOGE(TAG, "Could not create particulate readings queue");
-    }
-    uart_flush(device_peripherals.IAQ_ZH03.uart_port);
-    while (1)
-    {
-        /*We only care about the PM 2.5 value*/
-        /*This can fail if checksum fails or bytes are less than frame length*/
-        if((ret = get_particulate_reading(&(device_peripherals.IAQ_ZH03), NULL, &PM_2_5, NULL)) == ESP_OK)
-        {
-            if(particulate_readings_queue != 0)
-            {
-                ESP_LOGI(TAG, "Found particulate matter queue allocated, now writing PM 2.5 value %d", (int)PM_2_5);
-                /*Don't block for the receiving task to dequeue a single item before we post to it*/
-                xQueueSend(particulate_readings_queue, &PM_2_5, 100/portTICK_RATE_MS);
-            }
-            else
-            {
-                ESP_LOGE(TAG, "Particulate matter queue not allocated, can't write PM 2.5 value %d", (int)PM_2_5);
-            }  
-        }
-        else if(ret == ESP_FAIL)
-        {
-            ESP_LOGE(TAG, "Particulate matter acquisition function returned FAIL");
-            vTaskDelay(500/portTICK_RATE_MS);
-        }
-        else if(ret == ESP_ERR_INVALID_SIZE)
-        {
-
-            ESP_LOGI(TAG, "Particulate matter acquisition function returned invalid buffer size");
-            vTaskDelay(500/portTICK_RATE_MS);
-        }
-        else
-        {
-            ESP_LOGI(TAG, "Particulate matter acquisition function returned undocumented error");
-            vTaskDelay(500/portTICK_RATE_MS);
-        }
-        
-        xEventGroupValue = xEventGroupWaitBits(task_sync_event_group, xBitstoWaitFor, pdTRUE, pdFALSE, 0); 
-
-        if(xEventGroupValue & xBitstoWaitFor)
-        {
-            //Let task finish up cleanly
-            vQueueDelete(particulate_readings_queue);
-            xuartSensorTaskHandle = NULL;
-            vTaskDelete(NULL);
-        } 
-    }
-    vTaskDelete(NULL);
-}
-
 void statusPageWsBroadcastTask(void *pvParameters)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
@@ -861,23 +703,6 @@ void statusPageWsBroadcastTask(void *pvParameters)
     /*Initialise ADC to sample battery cell voltage*/
     init_adc();
 
-    if (xTaskCreate(TCA9534HandlerTask, "TCA9534Interrupt", 4096, NULL, 1, &xTCA9534HandlerTaskHandle))
-    {
-        ESP_LOGI(TAG, "Successfully created TCA9534 handler task");
-    }
-    else
-    {
-        ESP_LOGE(TAG, "Could not create TCA9534 handler task");
-    }
-        
-    if(xTaskCreate(uartSensorTask, "uartSensorTask", 8192, NULL, 1, &xuartSensorTaskHandle))
-    {
-        ESP_LOGI(TAG, "Successfully created particulate matter sensor handler task");
-    }
-    else
-    {
-        ESP_LOGE(TAG, "Could not create particulate matter sensor handler task");
-    }
     while (1)
     {
 
@@ -892,9 +717,6 @@ void statusPageWsBroadcastTask(void *pvParameters)
                 //Let task finish up cleanly
                 json_free_serialized_string(status_string);
                 xStatusBroadcastHandle = NULL;
-                /*As we depend on the reference PM 2.5 value passed from the PM sensor handler, we would like to complete dereferecing its reference first from
-                the queue otherwise a race condition occurs as both would close non-deterministically causing undefined behaviour*/
-                xEventGroupSetBits(task_sync_event_group, NOTIFY_WEBSERVER_PARTICULATE_MATTER_TASK_CLOSE);
                 vTaskDelete(NULL);
             }
             else
@@ -997,11 +819,11 @@ void infaredPageWsBroadcastTask(void *pvParameters)
         if(ret != ESP_OK)
         {
             ESP_LOGE(TAG, "Failed to get thermal image, returned error code %d", ret);
-            //Display Zeroed out image buffer    to signify that there is an error.
+            //Display Zeroed out image buffer to signify that there is an error.
             memset(image_buffer, 0, 768);
             //Do something else
         }
-        base64_camera_string = b64_encode_thermal_img(base64_camera_string, image_buffer/*camera_data_float*/);
+        base64_camera_string = b64_encode_thermal_img(base64_camera_string, image_buffer);
     
         xEventGroupValue = xEventGroupWaitBits(task_sync_event_group, xBitstoWaitFor, pdTRUE, pdFALSE, 0);
     
@@ -1190,15 +1012,6 @@ esp_err_t setupGpioExpander(TCA9534 *TCA9534_inst, SemaphoreHandle_t *bus_mutex)
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
     *bus_mutex = xSemaphoreCreateMutex();
 
-    //create a queue to handle gpio event from isr
-    gpio_evt_queue = xQueueCreate(10, sizeof(uint32_t));
-
-    //install gpio isr service
-    //Pass value 0, it will default to allocating a non-shared interrupt of level 1, 2 or 3
-    gpio_install_isr_service(0);
-    //hook isr handler for specific gpio pin
-    gpio_isr_handler_add(GPIO_TCA9534_INT, TCA9534_isr_handler, (void *)GPIO_TCA9534_INT);
-
     esp_err_t ret = TCA9534_init(TCA9534_inst, TCA9534_ADDR, I2C_MASTER_NUM, GPIO_TCA9534_INT, bus_mutex);
     if (ret != ESP_OK)
     {
@@ -1315,8 +1128,6 @@ void webServerTask(void *pvParameters)
     /*Allocate this connection memory to psram*/
     connectionMemory = (char*)malloc(sizeof(RtosConnType) * MAX_CONNECTIONS);
 
-    workqueue = xQueueCreate(20, sizeof(user_command));
-
     espFsInit((void *)(image_espfs_start));
 
     tcpip_adapter_init();
@@ -1387,8 +1198,17 @@ void app_main()
     ret = setup_particulate_sensor(&(device_peripherals.IAQ_ZH03), ZH03_UART_NUM, ZH03_BAUDRATE, ZH03_TXD_PIN, ZH03_RXD_PIN);
     if (ret != ESP_OK)
     {
+        ESP_LOGE(TAG, "Could not setup PM 2.5 sensor");
         /*Do something*/
     }
+
+    ret = set_QA_mode(&(device_peripherals.IAQ_ZH03));
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Could not set QA mode");
+        /*Do something*/
+    }
+
     /*Erasing NVS for use by bluetooth and Wifi*/
     ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND)
@@ -1407,13 +1227,37 @@ void app_main()
     esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
     esp_bt_controller_init(&bt_cfg);
 
-
-    /*Event group for task synchronisation*/
-    task_sync_event_group = xEventGroupCreate();
-
-    /*This should Same priority as the bluetooth task, but we will set the antenna access prioritisation in ESP-IDF, of the two*/
-    xTaskCreate(webServerTask, "webServerTask", 4096, NULL, 10, &xWebServerTaskHandle);
-
+    int32_t cd_level;
+    TCA9534_get_level(&(device_peripherals.IAQ_TCA9534), TCA9534_SD_CD, &cd_level);
+    if(cd_level == TCA9534_HIGH)
+    {
+        for(int i=0;i<2;i++)
+        {
+            TCA9534_set_level(&(device_peripherals.IAQ_TCA9534), TCA9534_WARN_LED, TCA9534_HIGH);
+            vTaskDelay(1000 / portTICK_RATE_MS);
+            TCA9534_set_level(&(device_peripherals.IAQ_TCA9534), TCA9534_WARN_LED, TCA9534_LOW);
+            vTaskDelay(1000 / portTICK_RATE_MS);
+        }
+        ESP_LOGI(TAG, "ENTERING SETUP MODE");
+        /*Event group for task synchronisation*/
+        task_sync_event_group = xEventGroupCreate();
+        /*This should Same priority as the bluetooth task, but we will set the antenna access prioritisation in ESP-IDF, of the two*/
+        xTaskCreate(webServerTask, "webServerTask", 4096, NULL, 10, &xWebServerTaskHandle);
+    }
+    else
+    {
+        ESP_LOGI(TAG, "ENTERING ACQUISITION MODE");
+        for(int i=0;i<2;i++)
+        {
+            TCA9534_set_level(&(device_peripherals.IAQ_TCA9534), TCA9534_WARN_LED, TCA9534_HIGH);
+            vTaskDelay(100 / portTICK_RATE_MS);
+            TCA9534_set_level(&(device_peripherals.IAQ_TCA9534), TCA9534_WARN_LED, TCA9534_LOW);
+            vTaskDelay(100 / portTICK_RATE_MS);
+        }
+            const int deep_sleep_sec = 10;
+            ESP_LOGI(TAG, "Entering deep sleep for %d seconds", deep_sleep_sec);
+            esp_deep_sleep(1000000LL * deep_sleep_sec);
+    }
     while (1)
     {
         /*Just a delay to yield control of the CPU, to feed the watchdog via the idle task, though this task priority is very low*/
