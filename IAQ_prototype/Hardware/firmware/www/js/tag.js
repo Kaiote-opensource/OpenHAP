@@ -86,23 +86,21 @@ var tag = {
         }
     },
     addDevice: function (device) {
-        // Initialise. If the database doesn't exist, it is created
         var found = 0
-        //         console.log(this.value())
-        if (this.value() != undefined) {
-            for (let index = 0; index < this.value().length; index++) {
-                const element = this.value()[index];
-                if (element.MAC == device.MAC) {
-                    //                     lib.update(device, 'devices', element.id)
-                    //                     found = 1
-                    console.log(element)
-                }
+
+        for (let index = 0; index < this.value().length; index++) {
+            const element = this.value()[index];
+            console.log(element)
+            if (element.MAC == device.MAC) {
+                lib.update(device, 'devices', element.MAC)
+                found = 1
+                break;
             }
         }
 
-        //         if (found == 0) {
-        //             lib.create('devices', device)
-        //         }
+        if (found == 0) {
+            lib.create('devices', device)
+        }
 
     },
     playInterval: null,
