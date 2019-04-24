@@ -88,7 +88,8 @@ var tag = {
     addDevice: function (device) {
         // Initialise. If the database doesn't exist, it is created
         var found = 0
-
+        console.log(1)
+        console.log(this.value())
         for (let index = 0; index < this.value().length; index++) {
             const element = this.value()[index];
             if (element.MAC == device.MAC) {
@@ -100,7 +101,7 @@ var tag = {
         if (found == 0) {
             lib.create('devices', device)
         }
-        
+
     },
     playInterval: null,
     doPlayInterval: function () {
