@@ -1,9 +1,5 @@
 const SOCKET_URL = "ws://192.168.4.1:80/tag.cgi";
 // const SOCKET_URL = "ws://localhost:8999";
-/***
- * Socket Management Library
- */
-
 var websocketInst = new WebSocket(SOCKET_URL);
 
 var tag = {
@@ -92,19 +88,25 @@ var tag = {
          * Check if device exists
          */
         var found = 0
-        for (let index = 0; index < this.value.length; index++) {
-            const element = this.value[index];
-            if (element.MAC == device.MAC) {
-                // this.value[index] = device
-                // found = 1
-                // console.log('found')
-                this.value.splice(index, 1)
-                break;
+        try {
+            for (let index = 0; index < this.value.length; index++) {
+
+                const element = this.value[index];
+
+                if (element.MAC == device.MAC) {
+                    this.value[index] = device
+                    found = 1
+                    break;
+                }
+                if (element.MAC == null) {
+                    this.value.splice(index, 1)
+                }
             }
-        }
-        if (found == 0) {
-            
-            this.value.push(device)
+            if (found == 0) {
+                this.value.push(device)
+            }
+        } catch (error) {
+
         }
     },
     playInterval: null,
@@ -113,7 +115,7 @@ var tag = {
             _kaiote_handler.playSound()
         }, this.playFrequency)
     },
-    getDistanceSeverity: function (data = null) {
+    getDistanceSeverity: function (datloa = null) {
         if (data !== null && this.selectedDevice !== null) {
             this.activeDevice = data
         }
@@ -206,4 +208,3 @@ websocketInst.onerror = function (evt) {
 websocketInst.onclose = function (evt) {
     socket.onClose(evt)
 };
-
