@@ -21,16 +21,17 @@
 #include "esp_spi_flash.h"
 
 #include "mbedtls/base64.h"
-#include "parson.h"
+
+#include "espfs.h"
+#include "espfs_image.h"
+#include "libesphttpd/httpd-espfs.h"
+
 #include <libesphttpd/esp.h>
 #include "libesphttpd/httpd.h"
-#include "libesphttpd/httpdespfs.h"
 #include "libesphttpd/cgiwifi.h"
 #include "libesphttpd/cgiflash.h"
 #include "libesphttpd/auth.h"
-#include "libesphttpd/espfs.h"
 #include "libesphttpd/captdns.h"
-#include "libesphttpd/webpages-espfs.h"
 #include "libesphttpd/cgiwebsocket.h"
 #include "libesphttpd/httpd-freertos.h"
 #include "libesphttpd/route.h"
@@ -49,12 +50,16 @@
 #include "tcpip_adapter.h"
 
 #include "HIH6030.h"
-// #include "ZH03.h"
+#include "ZH03.h"
 #include "DS3231.h"
 #include "TCA9534A.h"
 #include <MLX90640_API.h>
 #include "MLX90640_I2C_Driver.h"
 #include "adc_sense.h"
+#include "parson.h"
+#include "user_commands.h"
+
+#include "task_sync.h"
 
 #include "esp_system.h"
 #include "sdkconfig.h"
@@ -68,9 +73,9 @@
 #include "esp_gatt_defs.h"
 #include "esp_gattc_api.h"
 #include "esp_gap_ble_api.h"
-
 #include "esp_eddystone_protocol.h"
 #include "esp_eddystone_api.h"
+
 
 #define WEB_PORT 80U
 #define MAX_CONNECTIONS 32U /*Maximum tabs open*/
@@ -96,9 +101,9 @@
 
 static const char *TAG = "APP-MAIN";
 
-static char *infared_ws_message = "Hi, Infared websocket!";
-static char *status_ws_message = "Hi, Status websocket!";
-static char *tag_ws_message = "Hi, Tag websocket!";
+static char *infared_handshake_msg = "Hi, Infared websocket!";
+static char *status_handshake_msg = "Hi, Status websocket!";
+static char *tag_info_handshake_msg = "Hi, Tag websocket!";
 
 static const char infared_cgi_resource_string[] = "/infared.cgi";
 static const char status_cgi_resource_string[] = "/status.cgi";
@@ -111,7 +116,7 @@ struct tm date_time;
 typedef struct
 {
     HIH6030 IAQ_HIH6030;
-    //ZH03 IAQ_ZH03;
+    ZH03 IAQ_ZH03;
     TCA9534 IAQ_TCA9534;
     DS3231  IAQ_DS3231;
     MLX90640 IAQ_MLX90640;
@@ -131,6 +136,21 @@ static TaskHandle_t xInfaredBroadcastHandle = NULL;
 static TaskHandle_t xTCA9534HandlerTaskHandle = NULL;
 static TaskHandle_t xTagBroadcastHandle = NULL;
 
+typedef struct
+{
+    Websock* ws;
+    char* command;
+    union
+    {
+        int32_t* signed_value;
+        uint32_t* unsigned_value;
+        float* float_value;
+        double* double_value;
+    }value;
+    char* uid;
+    char* return_code_string;
+} user_command;
+
 /*Connection memory to be allocated from psram heap via malloc*/
 static char* connectionMemory = NULL;
 static HttpdFreertosInstance httpdFreertosInstance;
@@ -142,9 +162,11 @@ const static int CONNECTED_BIT = BIT0;
 static EventGroupHandle_t wifi_ap_event_group;
 
 /*Task synchronisation event group*/
-static EventGroupHandle_t webserver_event_group = NULL;
+static EventGroupHandle_t task_sync_event_group = NULL;
 
 static xQueueHandle gpio_evt_queue = NULL;
+static xQueueHandle particulate_readings_queue = NULL;
+static xQueueHandle workqueue = NULL;
 
 /* declare static functions */
 static void esp_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param);
@@ -157,7 +179,7 @@ void tagPageWsBroadcastTask(void *pvParameters);
 
 static esp_ble_scan_params_t ble_scan_params = 
 {
-    .scan_type = BLE_SCAN_TYPE_ACTIVE,
+    .scan_type = BLE_SCAN_TYPE_PASSIVE,
     .own_addr_type = BLE_ADDR_TYPE_PUBLIC,
     .scan_filter_policy = BLE_SCAN_FILTER_ALLOW_ALL,
     .scan_interval = 0x50,
@@ -177,6 +199,9 @@ void TCA9534HandlerTask(void *pvParameters)
     int32_t wp_level = 0;
     int32_t cd_level = 0;
     uint32_t io_num;
+
+    EventBits_t xEventGroupValue;
+    EventBits_t xBitstoWaitFor = NOTIFY_WEBSERVER_GPIO_INTERRUPT_TASK_CLOSE;
 
     TCA9534_get_level(&(device_peripherals.IAQ_TCA9534), TCA9534_SD_CD, &cd_level);
     TCA9534_get_level(&(device_peripherals.IAQ_TCA9534), TCA9534_SD_WP, &wp_level);
@@ -212,6 +237,14 @@ void TCA9534HandlerTask(void *pvParameters)
                 }
             }
         }
+        xEventGroupValue = xEventGroupWaitBits(task_sync_event_group, xBitstoWaitFor, pdTRUE, pdFALSE, 0); 
+
+        if(xEventGroupValue & xBitstoWaitFor)
+        {
+            //Let task finish up cleanly
+            xTCA9534HandlerTaskHandle = NULL;
+            vTaskDelete(NULL);
+        }
     }
 }
 
@@ -225,7 +258,7 @@ static void esp_eddystone_show_inform(const esp_eddystone_result_t *res, const e
     {
     case EDDYSTONE_FRAME_TYPE_TLM:
     {
-        sprintf(mac_buffer, "%02x%02x%02x%02x%02x%02x", scan_result->scan_rst.bda[0],
+        sprintf(mac_buffer, "%02X%02X%02X%02X%02X%02X", scan_result->scan_rst.bda[0],
                                                         scan_result->scan_rst.bda[1],
                                                         scan_result->scan_rst.bda[2],
                                                         scan_result->scan_rst.bda[3],
@@ -254,6 +287,7 @@ static void esp_eddystone_show_inform(const esp_eddystone_result_t *res, const e
         break;
     }
     default:
+        ESP_LOGD(TAG, "Other frame type received");
         break;
     }
 }
@@ -263,12 +297,19 @@ static void esp_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *par
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
     esp_err_t err;
 
+    EventBits_t xEventGroupValue;
+    EventBits_t xBitstoWaitFor = NOTIFY_WEBSERVER_TAG_INFO_TASK_CLOSE;
+
     switch (event)
     {
     case ESP_GAP_BLE_SCAN_PARAM_SET_COMPLETE_EVT:
     {
-        uint32_t duration = 0;
-        esp_ble_gap_start_scanning(duration);
+        uint32_t duration = 20;
+        err = esp_ble_gap_start_scanning(duration);
+        if(err != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Scanning returned error!");
+        }
         break;
     }
     case ESP_GAP_BLE_SCAN_START_COMPLETE_EVT:
@@ -295,6 +336,7 @@ static void esp_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *par
             esp_err_t ret = esp_eddystone_decode(scan_result->scan_rst.ble_adv, scan_result->scan_rst.adv_data_len, &eddystone_res);
             if (ret)
             {
+                ESP_LOGI(TAG, "The received data is not an eddystone frame packet or a correct eddystone frame packet.");
                 // error:The received data is not an eddystone frame packet or a correct eddystone frame packet.
                 // just return
                 return;
@@ -306,7 +348,26 @@ static void esp_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *par
                 // For example, just print them:
                 esp_eddystone_show_inform(&eddystone_res, scan_result);
             }
+                /*Dont toggle bit representing notification that the tag info task is meant to close, just close cleanly and set own bit, preventing callback re-entry*/ 
             break;
+        }
+        case ESP_GAP_SEARCH_INQ_CMPL_EVT:
+        {
+            ESP_LOGI(TAG, "Scan is complete!");
+            xEventGroupValue = xEventGroupWaitBits(task_sync_event_group, xBitstoWaitFor, pdTRUE, pdFALSE, 0); 
+            if(xEventGroupValue & xBitstoWaitFor)
+            {
+                ESP_LOGI(TAG, "Stopping scan due to signal being raised!");                
+                //Let task finish up cleanly
+                xTagBroadcastHandle = NULL;
+                vTaskDelete(xTagBroadcastHandle);
+            }
+            else
+            {
+                ESP_LOGI(TAG, "Restarting scan!");
+                esp_ble_gap_set_scan_params(&ble_scan_params);
+            }
+            
         }
         default:
             break;
@@ -321,11 +382,12 @@ static void esp_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *par
         }
         else
         {
-            ESP_LOGI(TAG, "Stop scan successfully");
+            ESP_LOGI(TAG, "Scan stopped");
         }
         break;
     }
     default:
+        ESP_LOGE(TAG, "Other callback event received");
         break;
     }
 }
@@ -345,64 +407,25 @@ esp_err_t esp_eddystone_app_register(void)
     return ESP_OK;
 }
 
-esp_err_t esp_eddystone_init(void)
-{
-    ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
-    esp_err_t ret;
-    if((ret = esp_bluedroid_init()) != ESP_OK)
-    {
-        ESP_LOGE(TAG, "Could not initialise and allocate bluedroid");
-    }
-    while(esp_bluedroid_get_status() != ESP_BLUEDROID_STATUS_INITIALIZED)
-    {
-        ESP_LOGI(TAG, "Bluedroid initialisation in progress...waiting...");
-        vTaskDelay(100/portTICK_RATE_MS);
-    }
-    ESP_LOGI(TAG, "Bluedroid initialisation complete");
-    if((ret = esp_bluedroid_enable()) != ESP_OK)
-    {
-        ESP_LOGE(TAG, "Could not enable bluedroid");
-        return ret;
-    }
-    while(esp_bluedroid_get_status() != ESP_BLUEDROID_STATUS_ENABLED)
-    {
-        ESP_LOGI(TAG, "Bluedroid enable is in progress...waiting...");
-        vTaskDelay(100/portTICK_RATE_MS);
-    }
-    ESP_LOGI(TAG, "Bluedroid is now enabled");
-    if((ret = esp_eddystone_app_register()) != ESP_OK)
-    {
-        ESP_LOGE(TAG, "Eddystone callback handler registration unsuccessful");
-    }
-    ESP_LOGI(TAG, "Eddystone callback handler succesfully registered");
-    return ret;
-}
+// esp_err_t esp_eddystone_deinit(void)
+// {
+//     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
+//     esp_err_t ret;
 
-esp_err_t esp_eddystone_deinit(void)
-{
-    ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
-    esp_err_t ret;
-    if((ret = esp_bluedroid_disable()) != ESP_OK)
-    {
-        ESP_LOGE(TAG, "Could not disable bluedroid");
-        return ret;
-    }
-    while(esp_bluedroid_get_status() != ESP_BLUEDROID_STATUS_INITIALIZED)
-    {
-        ESP_LOGI(TAG, "Bluedroid disable in progress...waiting...");
-        vTaskDelay(100/portTICK_RATE_MS);
-    }
-    if((ret = esp_bluedroid_deinit()) != ESP_OK)
-    {
-        ESP_LOGE(TAG, "Could not de-initialise and deallocate bluedroid");
-        return ret;
-    }
-    while(esp_bluedroid_get_status() != ESP_BLUEDROID_STATUS_UNINITIALIZED)
-    {
-        ESP_LOGI(TAG, "Bluedroid de-initialisation in progress...waiting...");
-    }
-    return ret;
-}
+//     //esp_eddystone_app_unregister();
+
+//     if((ret = esp_bluedroid_disable()) != ESP_OK)
+//     {
+//         ESP_LOGE(TAG, "Could not disable bluedroid");
+//         return ret;
+//     }
+//     // if((ret = esp_bluedroid_deinit()) != ESP_OK)
+//     // {
+//     //     ESP_LOGE(TAG, "Could not de-initialise and deallocate bluedroid");
+//     //     return ret;
+//     // }
+//     return ret;
+// }
 
 static esp_err_t powerOnSelfTest(void)
 {
@@ -412,18 +435,75 @@ static esp_err_t powerOnSelfTest(void)
     return ESP_OK;
 }
 
-static void receiveCommand(char *cmd)
-{
-    ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
-    /*Work more on this*/
-    ESP_LOGI(TAG, "%s", cmd);
-}
-
-//Queue all commands from all websockets and have a single decoding handler to avoid race conditions
 static void myWebsocketRecv(Websock *ws, char *data, int len, int flags)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
-    receiveCommand(data);
+
+    char* value_search_string;
+    char* uid_search_string;
+    char* sanitised_json_string = NULL;
+    JSON_Value *root_value = NULL;
+    JSON_Object * root_object = NULL;
+    JSON_Object * command_object = NULL;
+    root_value = json_parse_string(data);
+    if(root_value != NULL)
+    {
+        sanitised_json_string = json_serialize_to_string(root_value);
+        ESP_LOGI(TAG, "Actual JSON received %s", sanitised_json_string);
+        json_free_serialized_string(sanitised_json_string);
+        if (json_value_get_type(root_value) != JSONObject)
+        {
+            ESP_LOGE(TAG, "Error! Json root type is type %d, expected %d", json_value_get_type(root_value), JSONObject);
+            /*Add error handling here*/
+            return;
+        }
+        root_object = json_value_get_object(root_value);
+        ESP_LOGI(TAG, "Root object has %d element(s)", json_object_get_count(root_object));
+        for(int i=0; i < COMMAND_NUM; i++)
+        {   
+            /*Search for the first valid command string...discard any else*/
+            if(json_object_has_value(root_object, user_commands[i]))
+            {
+                ESP_LOGI(TAG, "Found command %s", user_commands[i]);
+                if(strcmp(user_commands[i], "SET_TIME") == 0)
+                {
+                    asprintf(&value_search_string, "%s.VALUE", user_commands[i]);
+                    ESP_LOGD(TAG, "Searching for %s...", value_search_string);
+                    time_t unix_time = (uint32_t)json_object_dotget_number(root_object, value_search_string);
+                    ESP_LOGD(TAG, "Found %s as %ul", value_search_string, (unsigned int)unix_time);
+                    //command.value.unsigned_value = (uint32_t)json_object_dotget_number(root_object, value_search_string);
+                    asprintf(&uid_search_string, "%s.UID", user_commands[i]);
+                    ESP_LOGD(TAG, "Searching for %s...", uid_search_string);
+                    ESP_LOGD(TAG, "Found %s as %s", value_search_string, json_object_dotget_string(root_object, uid_search_string));
+                    localtime_r(&unix_time, &date_time);
+                    if(ds3231_set_time(&(device_peripherals.IAQ_DS3231), &date_time) == ESP_OK)
+                    {
+                        ESP_LOGI(TAG, "Successfully set device time");
+                        if(json_object_dotremove(root_object, value_search_string) == JSONSuccess)
+                        {
+                            ESP_LOGI(TAG, "Successfully created command feedback message");
+                            sanitised_json_string = json_serialize_to_string(root_value);
+                            ESP_LOGI(TAG, "Json response to client %s", sanitised_json_string);
+                            cgiWebsocketSend(&httpdFreertosInstance.httpdInstance, ws, sanitised_json_string, strlen(sanitised_json_string), WEBSOCK_FLAG_NONE);
+                        }
+                    }
+                    else
+                    {
+                        ESP_LOGE(TAG, "Could not set device time at this time, try again!");
+                    }       
+                    free(value_search_string);
+                    free(uid_search_string);
+                    json_free_serialized_string(sanitised_json_string);
+                }
+            }
+        }
+    }
+    else
+    {
+        ESP_LOGE(TAG, "Parse string returned error!");
+        /*Add error handling here*/
+    }
+    return;
 }
 
 /*Websocket disconnected. Stop task if none connected*/
@@ -435,12 +515,8 @@ static void myStatusWebsocketClose(Websock *ws)
 
     if (connections == 1)
     {
-        vTaskDelete(xStatusBroadcastHandle);
-        xStatusBroadcastHandle = NULL;
-//        vTaskDelete(xuartSensorTaskHandle);
-        vTaskDelete(xTCA9534HandlerTaskHandle);
-        xTCA9534HandlerTaskHandle = NULL;
-        //Remember to flush hardware buffer via a deinit method for the peripheral(Device insensitive)
+        xEventGroupSetBits( task_sync_event_group,  NOTIFY_WEBSERVER_STATUS_TASK_CLOSE |
+                                                    NOTIFY_WEBSERVER_GPIO_INTERRUPT_TASK_CLOSE);      
     }
 }
 
@@ -453,9 +529,7 @@ static void myInfaredWebsocketClose(Websock *ws)
 
     if (connections == 1)
     {
-        vTaskDelete(xInfaredBroadcastHandle);
-        xInfaredBroadcastHandle = NULL;
-        //Remember to flush hardware buffer via a deinit method for the peripheral(Device insensitive)
+        xEventGroupSetBits( task_sync_event_group,  NOTIFY_WEBSERVER_THERMAL_VIEWER_TASK_CLOSE);  
     }
 }
 
@@ -463,25 +537,12 @@ static void myInfaredWebsocketClose(Websock *ws)
 static void myTagWebsocketClose(Websock *ws)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
-    esp_err_t ret;
     int connections = cgiWebsockBroadcast(&httpdFreertosInstance.httpdInstance, tag_cgi_resource_string, null_test_string, strlen(null_test_string), WEBSOCK_FLAG_NONE);
     ESP_LOGI(TAG, "Tag info page connection close received, Previous connections were %d", connections);
 
     if (connections == 1)
     {
-        if((ret = esp_eddystone_deinit()) != ESP_OK)
-        {
-            ESP_LOGE(TAG, "Eddystone deinitialise failed, returned %d", ret);
-        }
-        ESP_LOGI(TAG, "Eddystone deinitialised succesfully");
-/*        if((ret = esp_bt_controller_disable()) != ESP_OK)
-        {
-            ESP_LOGE(TAG, "Bluetooth controller disable failed, returned %d", ret);
-        }
-        ESP_LOGI(TAG, "Bluetooth controller disabled succesfully");
-*/        
-        vTaskDelete(xTagBroadcastHandle);
-        xTagBroadcastHandle = NULL;      
+        xEventGroupSetBits(task_sync_event_group,  NOTIFY_WEBSERVER_TAG_INFO_TASK_CLOSE);      
     }
 }
 
@@ -494,18 +555,12 @@ static void myStatusWebsocketConnect(Websock *ws)
 
     if (connections == 0)
     {
-        // device_peripherals.IAQ_ZH03.PM_2_5 = 0;
-        device_peripherals.IAQ_TCA9534.pinModeConf = 0;
-        device_peripherals.IAQ_TCA9534.port = 0;
-        device_peripherals.IAQ_TCA9534.polarity = 0;
-        device_peripherals.IAQ_TCA9534.polarity = 0;
-
-        if (xTaskCreate(statusPageWsBroadcastTask, "statusPageTask", 4096, NULL, 3, &xStatusBroadcastHandle) == pdPASS)
+        if (xTaskCreatePinnedToCore(statusPageWsBroadcastTask, "statusPageTask", 8192, NULL, 2, &xStatusBroadcastHandle,1))
         {
             ESP_LOGI(TAG, "Created status broadcast task");
             ws->recvCb = myWebsocketRecv;
             ws->closeCb = myStatusWebsocketClose;
-            cgiWebsocketSend(&httpdFreertosInstance.httpdInstance, ws, status_ws_message, strlen(status_ws_message), WEBSOCK_FLAG_NONE);
+            cgiWebsocketSend(&httpdFreertosInstance.httpdInstance, ws, status_handshake_msg, strlen(status_handshake_msg), WEBSOCK_FLAG_NONE);
         }
         else
         {
@@ -515,7 +570,7 @@ static void myStatusWebsocketConnect(Websock *ws)
     }
     ws->recvCb = myWebsocketRecv;
     ws->closeCb = myStatusWebsocketClose;
-    cgiWebsocketSend(&httpdFreertosInstance.httpdInstance, ws, status_ws_message, strlen(status_ws_message), WEBSOCK_FLAG_NONE);
+    cgiWebsocketSend(&httpdFreertosInstance.httpdInstance, ws, status_handshake_msg, strlen(status_handshake_msg), WEBSOCK_FLAG_NONE);
 }
 
 /*Websocket connected. Start task if none prior connected, set websocket callback methods and send welcome message.*/
@@ -527,12 +582,12 @@ static void myInfaredWebsocketConnect(Websock *ws)
 
     if (connections == 0)
     {
-        if (xTaskCreatePinnedToCore(infaredPageWsBroadcastTask, "infaredPageTask", 24000, NULL, 2, &xInfaredBroadcastHandle, 0) == pdPASS)
+        if (xTaskCreatePinnedToCore(infaredPageWsBroadcastTask, "infaredPageTask", 24000, NULL, 2, &xInfaredBroadcastHandle, 1))
         {
             ESP_LOGI(TAG, "Created infared broadcast task");
             ws->recvCb = myWebsocketRecv;
             ws->closeCb = myInfaredWebsocketClose;
-            cgiWebsocketSend(&httpdFreertosInstance.httpdInstance, ws, infared_ws_message, strlen(infared_ws_message), WEBSOCK_FLAG_NONE);
+            cgiWebsocketSend(&httpdFreertosInstance.httpdInstance, ws, infared_handshake_msg, strlen(infared_handshake_msg), WEBSOCK_FLAG_NONE);
         }
         else
         {
@@ -542,7 +597,7 @@ static void myInfaredWebsocketConnect(Websock *ws)
     }
     ws->recvCb = myWebsocketRecv;
     ws->closeCb = myInfaredWebsocketClose;
-    cgiWebsocketSend(&httpdFreertosInstance.httpdInstance, ws, infared_ws_message, strlen(infared_ws_message), WEBSOCK_FLAG_NONE);
+    cgiWebsocketSend(&httpdFreertosInstance.httpdInstance, ws, infared_handshake_msg, strlen(infared_handshake_msg), WEBSOCK_FLAG_NONE);
 }
 
 /*Websocket connected. Start task if none prior connected, set websocket callback methods and send welcome message.*/
@@ -554,12 +609,12 @@ static void myTagWebsocketConnect(Websock *ws)
 
     if (connections == 0)
     {
-        if (xTaskCreatePinnedToCore(tagPageWsBroadcastTask, "tagPageTask", 2048, NULL, 2, &xTagBroadcastHandle, 0) == pdPASS)
+        if (xTaskCreatePinnedToCore(tagPageWsBroadcastTask, "tagPageTask", 4096, NULL, 2, &xTagBroadcastHandle, 1))
         {
             ESP_LOGI(TAG, "Created tag info broadcast task");
             ws->recvCb = myWebsocketRecv;
             ws->closeCb = myTagWebsocketClose;
-            cgiWebsocketSend(&httpdFreertosInstance.httpdInstance, ws, tag_ws_message, strlen(tag_ws_message), WEBSOCK_FLAG_NONE);
+            cgiWebsocketSend(&httpdFreertosInstance.httpdInstance, ws, tag_info_handshake_msg, strlen(tag_info_handshake_msg), WEBSOCK_FLAG_NONE);
         }
         else
         {
@@ -569,7 +624,7 @@ static void myTagWebsocketConnect(Websock *ws)
     }
     ws->recvCb = myWebsocketRecv;
     ws->closeCb = myTagWebsocketClose;
-    cgiWebsocketSend(&httpdFreertosInstance.httpdInstance, ws, tag_ws_message, strlen(tag_ws_message), WEBSOCK_FLAG_NONE);
+    cgiWebsocketSend(&httpdFreertosInstance.httpdInstance, ws, tag_info_handshake_msg, strlen(tag_info_handshake_msg), WEBSOCK_FLAG_NONE);
 }
 
 HttpdBuiltInUrl builtInUrls[] = 
@@ -631,21 +686,29 @@ esp_err_t get_thermal_image(peripherals_struct *device_peripherals, float* image
 char *simulateStatusValues(char *status_string, peripherals_struct *device_peripherals)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
+
     int32_t cd_level;
     uint32_t battery_level;
+
     hih6030_status_t status;
     float temperature;
     float humidity;
+    
+    int32_t PM_2_5;
 
+    /*Query time from DS3231 RTC*/
     if (ds3231_get_time(&(device_peripherals->IAQ_DS3231), &date_time) != ESP_OK)
     {
         ESP_LOGE(TAG, "Could not get time from DS3231");
     }
 
+    /*Poll SD card connection state*/
     TCA9534_get_level(&(device_peripherals->IAQ_TCA9534), TCA9534_SD_CD, &cd_level);
 
+    /*Get temperature and humidity readings*/
     get_temp_humidity(&(device_peripherals->IAQ_HIH6030), &status, &temperature, &humidity);
 
+    /*Get battery voltage*/
     TCA9534_set_level(&(device_peripherals->IAQ_TCA9534), TCA9534_BATT_SEL, TCA9534_HIGH);
     vTaskDelay(100/portTICK_RATE_MS);
     get_adc_value(&battery_level);
@@ -654,12 +717,23 @@ char *simulateStatusValues(char *status_string, peripherals_struct *device_perip
     JSON_Object *root_object = json_value_get_object(root_value);
     json_object_set_number(root_object, "HUM", (int)(humidity));
     json_object_set_number(root_object, "TEMP",/*temp*/(int)(temperature));
-    // if ((device_peripherals->IAQ_ZH03.PM_2_5) != ESP_FAIL && (device_peripherals->IAQ_ZH03.PM_2_5) != ESP_ERR_TIMEOUT && (device_peripherals->IAQ_ZH03.PM_2_5) != 0)
-    // {
-    //     json_object_set_number(root_object, "PM25", device_peripherals->IAQ_ZH03.PM_2_5);
-    // }
+
+    /*Get particulate matter reading from queue*/
+    if(particulate_readings_queue != 0 )
+    {
+        // Receive a message from the queue or block for 1000ms if there are no particulate readings in queue, such as at startup.
+        if( xQueueReceive(particulate_readings_queue, &PM_2_5, 1000/portTICK_RATE_MS) )
+        {
+            json_object_set_number(root_object, "PM25", PM_2_5);
+        }
+    }
+    else
+    {
+        /* code */
+        ESP_LOGE(TAG, "Particulate matter queue not created! Cant receive readings, PM 2.5 json not created");
+    }
     //json_object_set_number(root_object, "TIME", rand()%100);
-    json_object_set_number(root_object, "RTC_BATT", rand() % 100);
+    json_object_set_number(root_object, "RTC_BATT", (int)((battery_level/3300)*100));
     //json_object_set_number(root_object, "MAIN_BATT", rand()%100);
     json_object_set_number(root_object, "DEVICE_TIME", mktime(&date_time)/*unix_time*/);
     json_object_set_string(root_object, "SD_CARD", cd_level == TCA9534_HIGH ? "DISCONNECTED" : "CONNECTED");
@@ -710,129 +784,257 @@ char *b64_encode_thermal_img(char *base64_dst, float *data)
 
     return base64_dst;
 }
-// void uartSensorTask(void *pvParameters)
-// {
-//     uart_flush(UART_NUM_1);
-//     while (1)
-//     {
-//         get_particulate_reading(&(device_peripherals.IAQ_ZH03));
-//     }
-//     vTaskDelete(NULL);
-// }
+
+void uartSensorTask(void *pvParameters)
+{
+    esp_err_t ret;
+    int32_t PM_2_5;
+
+    EventBits_t xEventGroupValue;
+    EventBits_t xBitstoWaitFor = NOTIFY_WEBSERVER_PARTICULATE_MATTER_TASK_CLOSE;
+
+    /*Allocate queue that can hold upto 5 particulate matter readings*/
+    particulate_readings_queue = xQueueCreate(5, sizeof(int32_t));
+
+    if(particulate_readings_queue == 0)
+    {
+        ESP_LOGE(TAG, "Could not create particulate readings queue");
+    }
+    uart_flush(device_peripherals.IAQ_ZH03.uart_port);
+    while (1)
+    {
+        /*We only care about the PM 2.5 value*/
+        /*This can fail if checksum fails or bytes are less than frame length*/
+        if((ret = get_particulate_reading(&(device_peripherals.IAQ_ZH03), NULL, &PM_2_5, NULL)) == ESP_OK)
+        {
+            if(particulate_readings_queue != 0)
+            {
+                ESP_LOGI(TAG, "Found particulate matter queue allocated, now writing PM 2.5 value %d", (int)PM_2_5);
+                /*Don't block for the receiving task to dequeue a single item before we post to it*/
+                xQueueSend(particulate_readings_queue, &PM_2_5, 100/portTICK_RATE_MS);
+            }
+            else
+            {
+                ESP_LOGE(TAG, "Particulate matter queue not allocated, can't write PM 2.5 value %d", (int)PM_2_5);
+            }  
+        }
+        else if(ret == ESP_FAIL)
+        {
+            ESP_LOGE(TAG, "Particulate matter acquisition function returned FAIL");
+            vTaskDelay(500/portTICK_RATE_MS);
+        }
+        else if(ret == ESP_ERR_INVALID_SIZE)
+        {
+
+            ESP_LOGI(TAG, "Particulate matter acquisition function returned invalid buffer size");
+            vTaskDelay(500/portTICK_RATE_MS);
+        }
+        else
+        {
+            ESP_LOGI(TAG, "Particulate matter acquisition function returned undocumented error");
+            vTaskDelay(500/portTICK_RATE_MS);
+        }
+        
+        xEventGroupValue = xEventGroupWaitBits(task_sync_event_group, xBitstoWaitFor, pdTRUE, pdFALSE, 0); 
+
+        if(xEventGroupValue & xBitstoWaitFor)
+        {
+            //Let task finish up cleanly
+            vQueueDelete(particulate_readings_queue);
+            xuartSensorTaskHandle = NULL;
+            vTaskDelete(NULL);
+        } 
+    }
+    vTaskDelete(NULL);
+}
 
 void statusPageWsBroadcastTask(void *pvParameters)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
+    
     int connections;
     char *status_string = NULL;
+
+    EventBits_t xEventGroupValue;
+    EventBits_t xBitstoWaitFor = NOTIFY_WEBSERVER_STATUS_TASK_CLOSE;
 
     /*Initialise ADC to sample battery cell voltage*/
     init_adc();
 
-    if (xTaskCreate(TCA9534HandlerTask, "TCA9534Interrupt", 2048, NULL, 1, &xTCA9534HandlerTaskHandle) == pdPASS //&&
-        /*xTaskCreatePinnedToCore(uartSensorTask, "uartSensorTask", 4096, NULL, 2, &xuartSensorTaskHandle, 0) == pdPASS*/)
+    if (xTaskCreate(TCA9534HandlerTask, "TCA9534Interrupt", 4096, NULL, 1, &xTCA9534HandlerTaskHandle))
     {
-        while (1)
-        {
+        ESP_LOGI(TAG, "Successfully created TCA9534 handler task");
+    }
+    else
+    {
+        ESP_LOGE(TAG, "Could not create TCA9534 handler task");
+    }
+        
+    if(xTaskCreate(uartSensorTask, "uartSensorTask", 8192, NULL, 1, &xuartSensorTaskHandle))
+    {
+        ESP_LOGI(TAG, "Successfully created particulate matter sensor handler task");
+    }
+    else
+    {
+        ESP_LOGE(TAG, "Could not create particulate matter sensor handler task");
+    }
+    while (1)
+    {
 
-            status_string = simulateStatusValues(status_string, &device_peripherals);
-            if (status_string != NULL)
+        status_string = simulateStatusValues(status_string, &device_peripherals);
+
+        xEventGroupValue = xEventGroupWaitBits(task_sync_event_group, xBitstoWaitFor, pdTRUE, pdFALSE, 0); 
+
+        if (status_string != NULL)
+        {
+            if(xEventGroupValue & xBitstoWaitFor)
+            {
+                //Let task finish up cleanly
+                json_free_serialized_string(status_string);
+                xStatusBroadcastHandle = NULL;
+                /*As we depend on the reference PM 2.5 value passed from the PM sensor handler, we would like to complete dereferecing its reference first from
+                the queue otherwise a race condition occurs as both would close non-deterministically causing undefined behaviour*/
+                xEventGroupSetBits(task_sync_event_group, NOTIFY_WEBSERVER_PARTICULATE_MATTER_TASK_CLOSE);
+                vTaskDelete(NULL);
+            }
+            else
             {
                 connections = cgiWebsockBroadcast(&httpdFreertosInstance.httpdInstance, status_cgi_resource_string, status_string, strlen(status_string), WEBSOCK_FLAG_NONE);
                 json_free_serialized_string(status_string);
                 ESP_LOGD(TAG, "Broadcast sent to %d connections", connections);
             }
+        }
+        else
+        {
+            if(xEventGroupValue & xBitstoWaitFor)
+            {
+                //Let task finish up cleanly
+                xStatusBroadcastHandle = NULL;
+                vTaskDelete(NULL);
+            }
             else
             {
-                ESP_LOGD(TAG, "Status page JSON assembler returned NULL");
+                ESP_LOGE(TAG, "Status page JSON assembler returned NULL");
             }
-            vTaskDelay(1000 / portTICK_RATE_MS);
         }
-        vTaskDelete(NULL);
+        vTaskDelay(1000 / portTICK_RATE_MS);
+    }
+    vTaskDelete(NULL);
+}
+
+void wsStringBurstBroadcast(const char* base64_string, const char* data_continue_identifier, const char* data_end_identifier)
+{
+    int connections = 0;
+    char *json_string = NULL;
+    char *data_txt_chunk = NULL;
+    int size_to_do;
+    int chunk_size;
+    int size;
+    int offset;
+    /* Keep the max burst size at half the maximum allowable HTTPD buffer, incase the string is filled with only escaped 
+       characters after jsonification, which would double the size of characters to the HTTPD buffer length*/
+    int burst_size = ((HTTPD_MAX_SENDBUFF_LEN%2) == 0) ? (HTTPD_MAX_SENDBUFF_LEN/2) : ((HTTPD_MAX_SENDBUFF_LEN/2)-1);
+    size = strlen(base64_string);
+    size_to_do = size;
+    for (int i = 0; size_to_do > 0; i++)
+    {
+        JSON_Value *root_value = json_value_init_object();
+        JSON_Object *root_object = json_value_get_object(root_value);
+        chunk_size = (size_to_do < HTTPD_MAX_SENDBUFF_LEN) ? size_to_do : burst_size;
+        offset = i * burst_size;
+        data_txt_chunk = (char *)malloc(HTTPD_MAX_SENDBUFF_LEN);
+        memset(data_txt_chunk, 0, chunk_size * sizeof(char));
+        strlcpy(data_txt_chunk, base64_string + offset, chunk_size + 1);
+        ESP_LOGI(TAG, "Allocated string chunk length is %d", strlen(data_txt_chunk));
+        //ESP_LOG_BUFFER_HEXDUMP("Raw data chunk:", data_txt_chunk, strlen(data_txt_chunk)+1, ESP_LOG_DEBUG);
+        if (json_object_set_string(root_object, (size_to_do <= burst_size) ? data_end_identifier : data_continue_identifier, data_txt_chunk) != JSONSuccess)
+        {
+            ESP_LOGE(TAG, "Setting json string failed");
+            free(data_txt_chunk);
+            json_value_free(root_value);
+            json_free_serialized_string(json_string);
+            break;
+        }
+        json_string = json_serialize_to_string(root_value);
+        if (json_string == NULL)
+        {
+            ESP_LOGI(TAG, "Allocation of json string failed");
+            free(data_txt_chunk);
+            json_value_free(root_value);
+            json_free_serialized_string(json_string);
+            break;
+        }
+        //ESP_LOG_BUFFER_HEXDUMP("JSON string:", json_string, strlen(json_string)+1, ESP_LOG_DEBUG);
+        connections = cgiWebsockBroadcast(&httpdFreertosInstance.httpdInstance, infared_cgi_resource_string, json_string, strlen(json_string), WEBSOCK_FLAG_NONE);
+        ESP_LOGD(TAG, "Sent chunk %d of raw data size %d of a maximum %d byte raw payload to %d connections", i, chunk_size, strlen(base64_string), connections);
+        ESP_LOGD(TAG, "json data size for this chunk is %d", strlen(json_string));
+        free(data_txt_chunk);
+        json_value_free(root_value);
+        json_free_serialized_string(json_string);
+        size_to_do -= chunk_size; //Subtract the quantity of data already transferred.
+        if (size_to_do < 1024)
+        {
+            if ((offset + chunk_size) != size)
+            {
+                ESP_LOGE(TAG, "Error: Burst size mismatch");
+            }
+        }
     }
 }
 
 void infaredPageWsBroadcastTask(void *pvParameters)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
-    /*Allocate this image buffer to the psram instead of the stack in internal RAM*/
-    float image_buffer[768] = {0};
+    char *base64_camera_string = NULL;
+    float image_buffer[768] = {0.0};
     esp_err_t ret;
-    int connections = 0;
-    char *base64_string = NULL;
-    char *json_string = NULL;
-    char *data_txt_chunk = NULL;
-    char *json_identifier = NULL;
-    int size_to_do;
-    int chunk_size;
-    int size;
-    int offset;
+
+    EventBits_t xEventGroupValue;
+    EventBits_t xBitstoWaitFor = NOTIFY_WEBSERVER_THERMAL_VIEWER_TASK_CLOSE;
     while (1)
     {
         ret = get_thermal_image(&device_peripherals, image_buffer);
         if(ret != ESP_OK)
         {
             ESP_LOGE(TAG, "Failed to get thermal image, returned error code %d", ret);
-            //Do something
+            //Display Zeroed out image buffer    to signify that there is an error.
+            memset(image_buffer, 0, 768);
+            //Do something else
         }
-        base64_string = b64_encode_thermal_img(base64_string, image_buffer/*camera_data_float*/);
+        base64_camera_string = b64_encode_thermal_img(base64_camera_string, image_buffer/*camera_data_float*/);
+    
+        xEventGroupValue = xEventGroupWaitBits(task_sync_event_group, xBitstoWaitFor, pdTRUE, pdFALSE, 0);
+    
+        if (base64_camera_string != NULL)
+        { 
 
-        if (base64_string != NULL)
-        {
-            //ESP_LOG_BUFFER_HEXDUMP("Base64 data:", base64_string, strlen(base64_string)+1, ESP_LOG_DEBUG);
-            size = strlen(base64_string);
-            size_to_do = size;
-            for (int i = 0; size_to_do > 0; i++)
+            if(xEventGroupValue & xBitstoWaitFor)
             {
-                JSON_Value *root_value = json_value_init_object();
-                JSON_Object *root_object = json_value_get_object(root_value);
-                chunk_size = (size_to_do < HTTPD_MAX_SENDBUFF_LEN) ? size_to_do : 1024;
-                offset = i * 1024;
-                json_identifier = (size_to_do <= 1024) ? "CAMERA_END" : "CAMERA_CONT";
-                data_txt_chunk = (char *)malloc(HTTPD_MAX_SENDBUFF_LEN);
-                memset(data_txt_chunk, 0, chunk_size * sizeof(char));
-                strlcpy(data_txt_chunk, base64_string + offset, chunk_size + 1);
-                ESP_LOGI(TAG, "Allocated string chunk length is %d", strlen(data_txt_chunk));
-                //ESP_LOG_BUFFER_HEXDUMP("Raw data chunk:", data_txt_chunk, strlen(data_txt_chunk)+1, ESP_LOG_DEBUG);
-                if (json_object_set_string(root_object, json_identifier, data_txt_chunk) != JSONSuccess)
-                {
-                    ESP_LOGI(TAG, "Setting json string failed");
-                    free(data_txt_chunk);
-                    json_value_free(root_value);
-                    json_free_serialized_string(json_string);
-                    break;
-                }
-                json_string = json_serialize_to_string(root_value);
-                if (json_string == NULL)
-                {
-                    ESP_LOGI(TAG, "Allocation of json string failed");
-                    free(data_txt_chunk);
-                    json_value_free(root_value);
-                    json_free_serialized_string(json_string);
-                    break;
-                }
-                //ESP_LOG_BUFFER_HEXDUMP("JSON string:", json_string, strlen(json_string)+1, ESP_LOG_DEBUG);
-                connections = cgiWebsockBroadcast(&httpdFreertosInstance.httpdInstance, infared_cgi_resource_string, json_string, strlen(json_string), WEBSOCK_FLAG_NONE);
-                ESP_LOGD(TAG, "Sent chunk %d of raw data size %d of a maximum %d byte raw payload to %d connections", i, chunk_size, strlen(base64_string), connections);
-                ESP_LOGD(TAG, "json data size for this chunk is %d", strlen(json_string));
-                free(data_txt_chunk);
-                json_value_free(root_value);
-                json_free_serialized_string(json_string);
-                size_to_do -= chunk_size; //Subtract the quantity of data already transferred.
-                if (size_to_do < 1024)
-                {
-                    if ((offset + chunk_size) != size)
-                    {
-                        ESP_LOGE(TAG, "Error: Burst size mismatch");
-                    }
-                }
+                //Let task finish up cleanly
+                free(base64_camera_string);
+                xInfaredBroadcastHandle = NULL;
+                vTaskDelete(NULL);
             }
-            free(base64_string);
+            else
+            {
+                //ESP_LOG_BUFFER_HEXDUMP("Base64 data:", base64_string, strlen(base64_string)+1, ESP_LOG_DEBUG);
+                wsStringBurstBroadcast(base64_camera_string, "CAMERA_CONT", "CAMERA_END");
+                free(base64_camera_string);
+            }
         }
         else
         {
-            ESP_LOGD(TAG, "Infared page JSON assembler returned NULL");
+            if(xEventGroupValue & xBitstoWaitFor)
+            {
+                xInfaredBroadcastHandle = NULL;
+                vTaskDelete(NULL);
+            }
+            else
+            {
+                ESP_LOGD(TAG, "Infared page JSON assembler returned NULL");
+            }
         }
+
         vTaskDelay(1000 / portTICK_RATE_MS);
     }
     vTaskDelete(NULL);
@@ -841,10 +1043,42 @@ void infaredPageWsBroadcastTask(void *pvParameters)
 void tagPageWsBroadcastTask(void *pvParameters)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
-    /*Set up bluetooth peripheral hardware*/
-    esp_eddystone_init();
-    /*<! set scan parameters*/
-    esp_ble_gap_set_scan_params(&ble_scan_params);
+    esp_err_t ret;
+    if(esp_bt_controller_get_status() == ESP_BT_CONTROLLER_STATUS_INITED && esp_bluedroid_get_status() == ESP_BLUEDROID_STATUS_UNINITIALIZED)
+    {
+        ESP_LOGI(TAG, "Enabling bluetooth controller and bluedroid");
+        esp_bt_controller_enable(ESP_BT_MODE_BLE);
+        /*Set up bluetooth peripheral hardware*/
+        if((ret = esp_bluedroid_init()) != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Could not initialise and allocate bluedroid");
+        }
+        ESP_LOGI(TAG, "Bluedroid initialisation complete");
+        if((ret = esp_bluedroid_enable()) != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Could not enable bluedroid");
+        }
+        ESP_LOGI(TAG, "Bluedroid is now enabled");
+        if((ret = esp_eddystone_app_register()) != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Eddystone callback handler registration unsuccessful");
+        }
+        ESP_LOGI(TAG, "Eddystone callback handler succesfully registered");
+        /*<! set scan parameters*/
+        esp_ble_gap_set_scan_params(&ble_scan_params);
+    }
+    else if(esp_bt_controller_get_status() == ESP_BT_CONTROLLER_STATUS_ENABLED && esp_bluedroid_get_status() == ESP_BLUEDROID_STATUS_ENABLED)
+    {
+        ESP_LOGI(TAG, "Bluetooth controller and bluedroid already enabled...starting scan");
+        esp_ble_gap_set_scan_params(&ble_scan_params);
+    }
+    else
+    {
+        ESP_LOGE(TAG, "Other controller- host state received! Error!");
+    }
+    
+    // btc_transfer_context()
+    // btc_gap_ble_cb_deep_free()
     while(1)
     {
         /*Yield control of the CPU briefly for 10ms*/
@@ -922,6 +1156,8 @@ void ICACHE_FLASH_ATTR init_wifi(void)
     esp_wifi_set_config(WIFI_IF_AP, &ap_config);
 
     ESP_ERROR_CHECK(esp_wifi_start());
+    free(ssid);
+    free(password);
 }
 
 esp_err_t setupTempHumiditySensor(HIH6030 *HIH6030_inst, SemaphoreHandle_t *bus_mutex)
@@ -945,16 +1181,8 @@ esp_err_t setupRTC(DS3231 *DS3231_inst, SemaphoreHandle_t *bus_mutex)
     }
     /*Set unix timestamp and convert to date-time format*/
     setenv("TZ", "EAT-3", 1);
-    /*time_t now = 1555427390;
-    // setup datetime: 2016-10-09 13:50:10
-    localtime_r(&now, &date_time);
+    tzset();
 
-    while (ds3231_set_time(DS3231_inst, &date_time) != ESP_OK)
-    {
-        ESP_LOGI(TAG, "Could not set time\n");
-        vTaskDelay(250 / portTICK_PERIOD_MS);
-    }
-    */
     return ret;
 }
 esp_err_t setupGpioExpander(TCA9534 *TCA9534_inst, SemaphoreHandle_t *bus_mutex)
@@ -976,7 +1204,6 @@ esp_err_t setupGpioExpander(TCA9534 *TCA9534_inst, SemaphoreHandle_t *bus_mutex)
     {
         /*Do something*/
     }
-
     ret = TCA9534_set_pin_direction(TCA9534_inst, TCA9534_SD_WP, TCA9534_INPUT);
     if (ret != ESP_OK)
     {
@@ -1017,7 +1244,7 @@ esp_err_t setupMLX90640(peripherals_struct *device_peripherals, SemaphoreHandle_
     }
     memset(&(device_peripherals->MLX90640params), 0, sizeof(paramsMLX90640));
     /*Due to some devices having hardware issues leading to wrong values in EEPROM we chack that the status register in RAM has default value 0x1901,
-    if not we set RAM value to 0x1901*/
+    if not we manually set RAM value to 0x1901*/
     MLX90640_I2CRead(&(device_peripherals->IAQ_MLX90640), 0x800D, 1, &reg_val);
     if(reg_val != 0x1901)
     {
@@ -1084,23 +1311,19 @@ esp_err_t setup_i2c(i2c_port_t port, int frequency, gpio_num_t sda_gpio, gpio_pu
 void webServerTask(void *pvParameters)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
-    
-    /*Event group to coordinate closing and opening of tabs, such that a task is closed, only when it is truly done*/
-    webserver_event_group = xEventGroupCreate();
 
     /*Allocate this connection memory to psram*/
     connectionMemory = (char*)malloc(sizeof(RtosConnType) * MAX_CONNECTIONS);
 
-    espFsInit((void *)(webpages_espfs_start));
+    workqueue = xQueueCreate(20, sizeof(user_command));
+
+    espFsInit((void *)(image_espfs_start));
 
     tcpip_adapter_init();
 
     httpdFreertosInit(&httpdFreertosInstance, builtInUrls, WEB_PORT, connectionMemory, MAX_CONNECTIONS, HTTPD_FLAG_NONE);
 
     httpdFreertosStart(&httpdFreertosInstance);
-
-    /*Allow a 2 second delay to allow stabilisation, avoiding brown out*/
-    //vTaskDelay(2000 / portTICK_RATE_MS);
 
     init_wifi();
 
@@ -1111,30 +1334,6 @@ void webServerTask(void *pvParameters)
     }
     vTaskDelete(NULL);
 }
-// esp_err_t setup_uart(uart_port_t uart_num, int baudrate, tx_io_num txd_pin, rx_io_num rxd_pin, int rx_buffer_size, int tx_buffer_size)
-// {
-//     esp_err_t ret;
-//     uart_config_t uart_config =
-//     {
-//         .baud_rate = baudrate,
-//         .data_bits = UART_DATA_8_BITS,
-//         .parity = UART_PARITY_DISABLE,
-//         .stop_bits = UART_STOP_BITS_1,
-//         .flow_ctrl = UART_HW_FLOWCTRL_DISABLE};
-//     };
-//     ret = uart_param_config(uart_num, &uart_config);
-//     if (ret != ESP_OK)
-//     {
-//         return ret;
-//     }
-//     ret = uart_set_pin(uart_num, txd_pin, rxd_pin, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
-//     if (ret != ESP_OK)
-//     {
-//         return ret;
-//     }
-//     ret = uart_driver_install(uart_num, rx_buffer_size * 2, 0, 0, NULL, 0);
-//     return ret;
-// }
 /*
 
 void acquisitionTask(void *pvParameters)
@@ -1152,41 +1351,40 @@ void app_main()
     ret = setup_i2c(I2C_MASTER_NUM, I2C_MASTER_FREQ_HZ, I2C_MASTER_SDA_IO, GPIO_PULLUP_DISABLE, I2C_MASTER_SCL_IO, GPIO_PULLUP_DISABLE);
     if (ret == ESP_OK)
     {
+        ESP_LOGI(TAG, "Successfully setup I2C peripheral");
         /*Do something*/
+        ret = setupGpioExpander(&(device_peripherals.IAQ_TCA9534), &i2c_bus_mutex);
+        if (ret != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Could not setup GPIO expander");
+            /*Do something*/
+        }
+        ret = setupTempHumiditySensor(&(device_peripherals.IAQ_HIH6030), &i2c_bus_mutex);
+        if (ret != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Could not setup Temp-humidity sensor");
+            /*Do something*/
+        }
+        ret = setupMLX90640(&device_peripherals, &i2c_bus_mutex);
+        if (ret != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Could not setup thermal camera");
+            /*Do something*/
+        }
+        ret = setupRTC(&(device_peripherals.IAQ_DS3231), &i2c_bus_mutex);
+        if (ret != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Could not setup RTC");
+            /*Do something*/
+        }
     }
-    ret = setupGpioExpander(&(device_peripherals.IAQ_TCA9534), &i2c_bus_mutex);
-    if (ret != ESP_OK)
+    else
     {
-        ESP_LOGE(TAG, "Could not setup GPIO expander");
-        /*Do something*/
+        ESP_LOGE(TAG, "Could not setup I2C peripheral");
+        /* Do something */
     }
-    ret = setupTempHumiditySensor(&(device_peripherals.IAQ_HIH6030), &i2c_bus_mutex);
-    if (ret != ESP_OK)
-    {
-        ESP_LOGE(TAG, "Could not setup Temo-humidity sensor");
-        /*Do something*/
-    }
-    ret = setupMLX90640(&device_peripherals, &i2c_bus_mutex);
-    if (ret != ESP_OK)
-    {
-        ESP_LOGE(TAG, "Could not setup thermal camera");
-        /*Do something*/
-    }
-    ret = setupRTC(&(device_peripherals.IAQ_DS3231), &i2c_bus_mutex);
-    if (ret != ESP_OK)
-    {
-        ESP_LOGE(TAG, "Could not setup thermal camera");
-        /*Do something*/
-    }
-    // ret = setup_uart(ZH03_UART_NUM, ZH03_BAUDRATE, ZH03_TXD_PIN, ZH03_RXD_PIN, ZH03_RX_BUF_SIZE, ZH03_TX_BUF_SIZE);
-    // if (ret != ESP_OK)
-    // {
-    //     /*Do something*/
-    // }
-    // ZH03B_init();
-
-    /*Test communication by i2c scanning*/
-    ret = powerOnSelfTest();
+    
+    ret = setup_particulate_sensor(&(device_peripherals.IAQ_ZH03), ZH03_UART_NUM, ZH03_BAUDRATE, ZH03_TXD_PIN, ZH03_RXD_PIN);
     if (ret != ESP_OK)
     {
         /*Do something*/
@@ -1202,17 +1400,23 @@ void app_main()
     /*Reboot if unsuccessful*/
     ESP_ERROR_CHECK(ret);
 
+    /*Release memory set aside for clasic BT as we shall not use it*/
     ESP_ERROR_CHECK(esp_bt_controller_mem_release(ESP_BT_MODE_CLASSIC_BT));
+
+    /*Initialise BT controller*/
     esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
     esp_bt_controller_init(&bt_cfg);
-    esp_bt_controller_enable(ESP_BT_MODE_BLE);
+
+
+    /*Event group for task synchronisation*/
+    task_sync_event_group = xEventGroupCreate();
 
     /*This should Same priority as the bluetooth task, but we will set the antenna access prioritisation in ESP-IDF, of the two*/
-    xTaskCreatePinnedToCore(webServerTask, "webServerTask", 4096, NULL, 10, &xWebServerTaskHandle, 0);
+    xTaskCreate(webServerTask, "webServerTask", 4096, NULL, 10, &xWebServerTaskHandle);
 
     while (1)
     {
-        /*Jusr a delay to yield control of the CPU, to feed the watchdog via the idle task, though this task priority is very low*/
+        /*Just a delay to yield control of the CPU, to feed the watchdog via the idle task, though this task priority is very low*/
         vTaskDelay(100 / portTICK_RATE_MS);
     }
     vTaskDelete(NULL);

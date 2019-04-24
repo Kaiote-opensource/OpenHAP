@@ -1,3 +1,6 @@
 [submodule "IAQ_prototype/Hardware/firmware/components/libesphttpd"]
 	path = IAQ_prototype/Hardware/firmware/components/libesphttpd
 	url = https://github.com/chmorgan/libesphttpd.git
+[submodule "IAQ_prototype/Hardware/firmware/components/espfs"]
+	path = IAQ_prototype/Hardware/firmware/components/espfs
+	url = https://github.com/jkent/esp32-espfs.git
