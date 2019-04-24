@@ -77,8 +77,8 @@ var tag = {
 
     },
     findDevice: function (id) {
-        for (let index = 0; index < this.value.length; index++) {
-            const element = this.value[index];
+        for (let index = 0; index < this.value().length; index++) {
+            const element = this.value()[index];
             if (element.MAC == id) {
                 this.activeDevice = element
                 break;
@@ -88,19 +88,21 @@ var tag = {
     addDevice: function (device) {
         // Initialise. If the database doesn't exist, it is created
         var found = 0
-        console.log(1)
-        console.log(this.value())
-        for (let index = 0; index < this.value().length; index++) {
-            const element = this.value()[index];
-            if (element.MAC == device.MAC) {
-                lib.update(device, 'devices', element.id)
-                found = 1
+        //         console.log(this.value())
+        if (this.value() != undefined) {
+            for (let index = 0; index < this.value().length; index++) {
+                const element = this.value()[index];
+                if (element.MAC == device.MAC) {
+                    //                     lib.update(device, 'devices', element.id)
+                    //                     found = 1
+                    console.log(element)
+                }
             }
         }
 
-        if (found == 0) {
-            lib.create('devices', device)
-        }
+        //         if (found == 0) {
+        //             lib.create('devices', device)
+        //         }
 
     },
     playInterval: null,
