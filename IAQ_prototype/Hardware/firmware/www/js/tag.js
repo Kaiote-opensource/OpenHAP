@@ -1,9 +1,20 @@
 const SOCKET_URL = "ws://192.168.4.1:80/tag.cgi";
 // const SOCKET_URL = "ws://localhost:8999";
+/***
+ * Socket Management Library
+ */
+
 var websocketInst = new WebSocket(SOCKET_URL);
 
+var lib = new LocalStorageDB('documents');
+
+// Check if the database was just created. Useful for initial database setup
+
+
 var tag = {
-    value: [],
+    value: function () {
+        return lib.get()['devices'];
+    },
     playFrequency: 1000,
     selectedDevice: null,
     activeDevice: null,
@@ -11,13 +22,13 @@ var tag = {
         this.selectedDevice = id
         this.findDevice(id)
         this.displayAllDevices()
-        this.getDistanceSeverity()
+        // this.getDistanceSeverity()
     },
     displayAllDevices: function () {
         var container = document.getElementById("tag-hub")
         container.innerHTML = ""
-        for (let index = 0; index < this.value.length; index++) {
-            const element = this.value[index];
+        for (let index = 0; index < this.value().length; index++) {
+            const element = this.value()[index];
             var power_since_time_on = _kaiote_handler.toHHMMSS(element.TIME / 10)
             var div_cont = '<div class="col-md-4">' +
                 '<div class="card" style="width: 100%;">' +
@@ -63,16 +74,7 @@ var tag = {
         }
     },
     removeDevice: function () {
-        // for (let index = 0; index < this.value.length; index++) {
-        //     const element = this.value[index];
-        //     var t1 = _kaiote_handler.currentTime()
-        //     var t2 =  element.LAST_CHECK 
-        //     var difference = _kaiote_handler.getTimeDifference(t1, t2)
-        //     if (difference > 10) {
-        //         this.value.splice(index, 1)
-        //         continue;
-        //     }
-        // }
+
     },
     findDevice: function (id) {
         for (let index = 0; index < this.value.length; index++) {
@@ -84,30 +86,21 @@ var tag = {
         }
     },
     addDevice: function (device) {
-        /**
-         * Check if device exists
-         */
+        // Initialise. If the database doesn't exist, it is created
         var found = 0
-        try {
-            for (let index = 0; index < this.value.length; index++) {
 
-                const element = this.value[index];
-
-                if (element.MAC == device.MAC) {
-                    this.value[index] = device
-                    found = 1
-                    break;
-                }
-                if (element.MAC == null) {
-                    this.value.splice(index, 1)
-                }
+        for (let index = 0; index < this.value().length; index++) {
+            const element = this.value()[index];
+            if (element.MAC == device.MAC) {
+                lib.update(device, 'devices', element.id)
+                found = 1
             }
-            if (found == 0) {
-                this.value.push(device)
-            }
-        } catch (error) {
-
         }
+
+        if (found == 0) {
+            lib.create('devices', device)
+        }
+        
     },
     playInterval: null,
     doPlayInterval: function () {
@@ -115,7 +108,7 @@ var tag = {
             _kaiote_handler.playSound()
         }, this.playFrequency)
     },
-    getDistanceSeverity: function (datloa = null) {
+    getDistanceSeverity: function (data = null) {
         if (data !== null && this.selectedDevice !== null) {
             this.activeDevice = data
         }
@@ -137,7 +130,7 @@ var socket = {
     },
     onOpen: function (evt) {
         helpers.log(evt)
-        console.trace()
+        // console.trace()
     },
     onClose: function (evt) {
         helpers.log(evt)
@@ -169,12 +162,12 @@ var socket = {
         } catch (error) {
 
         }
-
-        response.LAST_CHECK = _kaiote_handler.currentTime()
+        // console.log(response.MAC)
+        // response.LAST_CHECK = _kaiote_handler.currentTime()
         tag.addDevice(response)
-        tag.removeDevice()
+        // tag.removeDevice()
         tag.displayAllDevices()
-        tag.getDistanceSeverity(response)
+        // tag.getDistanceSeverity(response)
 
         if (response.MAC = tag.selectedDevice) {
             var audio = new Audio('./resources/notification.mp3')
@@ -208,3 +201,4 @@ websocketInst.onerror = function (evt) {
 websocketInst.onclose = function (evt) {
     socket.onClose(evt)
 };
+
