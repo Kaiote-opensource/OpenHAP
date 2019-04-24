@@ -98,6 +98,31 @@ var socket = {
 
         var response = JSON.parse(evt)
 
+        try {
+            if ('SET_TIME' in response) {
+                _kaiote_handler.toast({
+                    type: "success",
+                    duration: 2000,
+                    message: "Time Set"
+                })
+
+            }
+
+            /**
+             * Start Measurement Response
+             */
+            if ('START_MEASUREMENT' in response) {
+                _kaiote_handler.toast({
+                    type: "success",
+                    duration: 2000,
+                    message: "Success"
+                })
+
+            }
+        } catch (error) {
+
+        }
+
         infared_responses.manageBuffer(response)
 
         infared_responses.imageFloating = Array.prototype.slice.call(new Float32Array(_base64ToArrayBuffer(infared_responses.bufferOut))).reverse();

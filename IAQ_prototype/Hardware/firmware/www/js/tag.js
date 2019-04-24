@@ -95,13 +95,15 @@ var tag = {
         for (let index = 0; index < this.value.length; index++) {
             const element = this.value[index];
             if (element.MAC == device.MAC) {
-                this.value[index] = device
-                found = 1
-                console.log('found')
+                // this.value[index] = device
+                // found = 1
+                // console.log('found')
+                this.value.splice(index, 1)
                 break;
             }
         }
         if (found == 0) {
+            
             this.value.push(device)
         }
     },
@@ -140,6 +142,31 @@ var socket = {
     },
     onMessage: function (evt) {
         var response = JSON.parse(evt)
+
+        try {
+            if ('SET_TIME' in response) {
+                _kaiote_handler.toast({
+                    type: "success",
+                    duration: 2000,
+                    message: "Time Set"
+                })
+
+            }
+
+            /**
+             * Start Measurement Response
+             */
+            if ('START_MEASUREMENT' in response) {
+                _kaiote_handler.toast({
+                    type: "success",
+                    duration: 2000,
+                    message: "Success"
+                })
+
+            }
+        } catch (error) {
+
+        }
 
         response.LAST_CHECK = _kaiote_handler.currentTime()
         tag.addDevice(response)
