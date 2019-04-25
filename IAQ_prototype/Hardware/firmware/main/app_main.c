@@ -13,6 +13,7 @@
  See the License for the specific language governing permissions and
  limitations under the License.
 */
+#include <math.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
@@ -46,7 +47,10 @@
 #include "freertos/event_groups.h"
 #include "esp_log.h"
 #include "esp_event_loop.h"
+
+#include "nvs.h"
 #include "nvs_flash.h"
+
 #include "tcpip_adapter.h"
 
 #include "HIH6030.h"
@@ -76,6 +80,12 @@
 #include "esp_gap_ble_api.h"
 #include "esp_eddystone_protocol.h"
 #include "esp_eddystone_api.h"
+
+#include <sys/unistd.h>
+#include <sys/stat.h>
+#include "esp_vfs_fat.h"
+#include "driver/sdmmc_host.h"
+#include "sdmmc_cmd.h"
 
 
 #define WEB_PORT 80U
@@ -110,6 +120,8 @@ static const char infared_cgi_resource_string[] = "/infared.cgi";
 static const char status_cgi_resource_string[] = "/status.cgi";
 static const char tag_cgi_resource_string[] = "/tag.cgi";
 
+static nvs_handle my_handle;
+
 static char *null_test_string = "\0";
 
 struct tm date_time;
@@ -128,7 +140,7 @@ peripherals_struct device_peripherals;
 
 /*Main task handles*/
 static TaskHandle_t xWebServerTaskHandle = NULL;
-static TaskHandle_t xDataloggerTaskHandle = NULL;
+static TaskHandle_t xacquisitionTaskHandle = NULL;
 /*Webserver subtask handles - 1 per page*/
 
 static TaskHandle_t xStatusBroadcastHandle = NULL;
@@ -228,7 +240,7 @@ static void esp_eddystone_show_inform(const esp_eddystone_result_t *res, const e
 static void esp_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
-    esp_err_t err;
+    esp_err_t ret;
 
     EventBits_t xEventGroupValue;
     EventBits_t xBitstoWaitFor = NOTIFY_WEBSERVER_TAG_INFO_TASK_CLOSE;
@@ -238,8 +250,8 @@ static void esp_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *par
     case ESP_GAP_BLE_SCAN_PARAM_SET_COMPLETE_EVT:
     {
         uint32_t duration = 20;
-        err = esp_ble_gap_start_scanning(duration);
-        if(err != ESP_OK)
+        ret = esp_ble_gap_start_scanning(duration);
+        if(ret != ESP_OK)
         {
             ESP_LOGE(TAG, "Scanning returned error!");
         }
@@ -247,9 +259,9 @@ static void esp_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *par
     }
     case ESP_GAP_BLE_SCAN_START_COMPLETE_EVT:
     {
-        if ((err = param->scan_start_cmpl.status) != ESP_BT_STATUS_SUCCESS)
+        if ((ret = param->scan_start_cmpl.status) != ESP_BT_STATUS_SUCCESS)
         {
-            ESP_LOGE(TAG, "Scan start failed: %s", esp_err_to_name(err));
+            ESP_LOGE(TAG, "Scan start failed: %s", esp_err_to_name(ret));
         }
         else
         {
@@ -266,7 +278,7 @@ static void esp_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *par
         {
             esp_eddystone_result_t eddystone_res;
             memset(&eddystone_res, 0, sizeof(eddystone_res));
-            esp_err_t ret = esp_eddystone_decode(scan_result->scan_rst.ble_adv, scan_result->scan_rst.adv_data_len, &eddystone_res);
+            ret = esp_eddystone_decode(scan_result->scan_rst.ble_adv, scan_result->scan_rst.adv_data_len, &eddystone_res);
             if (ret)
             {
                 //ESP_LOGI(TAG, "The received data is not an eddystone frame packet or a correct eddystone frame packet.");
@@ -291,9 +303,24 @@ static void esp_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *par
             if(xEventGroupValue & xBitstoWaitFor)
             {
                 ESP_LOGI(TAG, "Stopping scan due to signal being raised!");                
-                //Let task finish up cleanly
-                xTagBroadcastHandle = NULL;
-                vTaskDelete(xTagBroadcastHandle);
+                //Let task finish up cleanly...signal back to the page that these results are hosted!
+                if((ret = esp_bluedroid_disable()) != ESP_OK)
+                {
+                    ESP_LOGW(TAG, "Could not disable bluedroid");
+                }
+                if((ret = esp_bluedroid_deinit()) != ESP_OK)
+                {
+                    ESP_LOGW(TAG, "Could not de-initialise and deallocate bluedroid");
+                }
+                if((ret = esp_bt_controller_disable()) != ESP_OK)
+                {
+                    ESP_LOGW(TAG, "Could not disable bluetooth controller");
+                }
+                if((ret = esp_bluedroid_deinit()) != ESP_OK)
+                {
+                    ESP_LOGW(TAG, "Could not deinit bluetooth controller");
+                }           
+                xEventGroupSetBits( task_sync_event_group,  NOTIFY_BT_CALLBACK_DONE);
             }
             else
             {
@@ -309,9 +336,9 @@ static void esp_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *par
     }
     case ESP_GAP_BLE_SCAN_STOP_COMPLETE_EVT:
     {
-        if ((err = param->scan_stop_cmpl.status) != ESP_BT_STATUS_SUCCESS)
+        if ((ret = param->scan_stop_cmpl.status) != ESP_BT_STATUS_SUCCESS)
         {
-            ESP_LOGE(TAG, "Scan stop failed: %s", esp_err_to_name(err));
+            ESP_LOGE(TAG, "Scan stop failed: %s", esp_err_to_name(ret));
         }
         else
         {
@@ -339,26 +366,6 @@ esp_err_t esp_eddystone_app_register(void)
     }
     return ESP_OK;
 }
-
-// esp_err_t esp_eddystone_deinit(void)
-// {
-//     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
-//     esp_err_t ret;
-
-//     //esp_eddystone_app_unregister();
-
-//     if((ret = esp_bluedroid_disable()) != ESP_OK)
-//     {
-//         ESP_LOGE(TAG, "Could not disable bluedroid");
-//         return ret;
-//     }
-//     // if((ret = esp_bluedroid_deinit()) != ESP_OK)
-//     // {
-//     //     ESP_LOGE(TAG, "Could not de-initialise and deallocate bluedroid");
-//     //     return ret;
-//     // }
-//     return ret;
-// }
 
 static void myWebsocketRecv(Websock *ws, char *data, int len, int flags)
 {
@@ -409,6 +416,7 @@ static void myWebsocketRecv(Websock *ws, char *data, int len, int flags)
                             sanitised_json_string = json_serialize_to_string(root_value);
                             ESP_LOGI(TAG, "Json response to client %s", sanitised_json_string);
                             cgiWebsocketSend(&httpdFreertosInstance.httpdInstance, ws, sanitised_json_string, strlen(sanitised_json_string), WEBSOCK_FLAG_NONE);
+                            json_free_serialized_string(sanitised_json_string);
                         }
                     }
                     else
@@ -417,7 +425,83 @@ static void myWebsocketRecv(Websock *ws, char *data, int len, int flags)
                     }       
                     free(value_search_string);
                     free(uid_search_string);
-                    json_free_serialized_string(sanitised_json_string);
+                }
+                else if(strcmp(user_commands[i], "START_MEASUREMENT") == 0)
+                {
+                    asprintf(&value_search_string, "%s.VALUE", user_commands[i]);
+                    ESP_LOGD(TAG, "Searching for %s...", value_search_string);
+                    uint8_t shutdown_value = (uint32_t)json_object_dotget_number(root_object, value_search_string);
+                    ESP_LOGD(TAG, "Found %s as %u", value_search_string, (unsigned int)shutdown_value);
+                    //command.value.unsigned_value = (uint32_t)json_object_dotget_number(root_object, value_search_string);
+                    asprintf(&uid_search_string, "%s.UID", user_commands[i]);
+                    ESP_LOGD(TAG, "Searching for %s...", uid_search_string);
+                    ESP_LOGD(TAG, "Found %s as %s", value_search_string, json_object_dotget_string(root_object, uid_search_string));
+                    if(shutdown_value == 1)
+                    {
+                        esp_err_t ret = nvs_open("nvs", NVS_READWRITE, &my_handle);
+                        if (ret != ESP_OK)
+                        {
+                            ESP_LOGE(TAG, "Error (%s) opening NVS handle!", esp_err_to_name(ret));
+                        }
+                        else 
+                        {
+                            ESP_LOGI(TAG, "Opened NVS handle for R/W operation");
+                            ret = nvs_set_i32(my_handle, "mode", acquisition_mode);
+                            if(ret == ESP_OK)
+                            {
+                                ESP_LOGI(TAG, "Successfully set aquisition mode in NVS");
+                                ESP_LOGI(TAG, "Committing updates in NVS ... ");
+                                ret = nvs_commit(my_handle);
+                                if(ret == ESP_OK)
+                                {
+                                    ESP_LOGI(TAG, "Successfully committed updates to flash");
+                                    if(json_object_dotremove(root_object, value_search_string) == JSONSuccess)
+                                    {
+                                        ESP_LOGD(TAG, "Sending message back to client...");
+                                        sanitised_json_string = json_serialize_to_string(root_value);
+                                        ESP_LOGI(TAG, "Json response to client %s", sanitised_json_string);
+                                        cgiWebsocketSend(&httpdFreertosInstance.httpdInstance, ws, sanitised_json_string, strlen(sanitised_json_string), WEBSOCK_FLAG_NONE);
+                                        json_free_serialized_string(sanitised_json_string);
+                                    }
+                                    else
+                                    {
+                                        ESP_LOGW(TAG, "Failed to send message to client!");
+                                    }
+                                    ESP_LOGI(TAG, "Closing webserver...");                                
+                                    vTaskDelay(3000/portTICK_RATE_MS);
+                                    xEventGroupSetBits( task_sync_event_group,  NOTIFY_WEBSERVER_CLOSE);
+                                    /*Block until the webserver finishes cleanly...for the maximum available time*/
+                                    EventBits_t xEventGroupValue = xEventGroupWaitBits(task_sync_event_group, NOTIFY_WEBSERVER_DONE, pdTRUE, pdFALSE, portMAX_DELAY);
+                                    if(xEventGroupValue & NOTIFY_WEBSERVER_DONE)
+                                    {
+                                        ESP_LOGI(TAG, "Webserver closed cleanly, restarting...");                                         
+                                        esp_restart();
+                                    }
+                                    else
+                                    {
+                                        ESP_LOGI(TAG, "Failed to close webserver cleanly in time, restarting back to webserver!");
+                                        ret = nvs_set_i32(my_handle, "mode", setup_mode);
+                                        /*As the webserver may be in an unstable state due to incomplete closing, just restart in case of a failure here*/
+                                        ESP_ERROR_CHECK(ret);
+                                        ret = nvs_commit(my_handle);
+                                        ESP_ERROR_CHECK(ret);
+                                        esp_restart();
+                                    }
+                                }
+                                else
+                                {
+                                    ESP_LOGE(TAG, "Error (%s) Failed to commit updates to flash...not restarting", esp_err_to_name(ret));
+                                }
+                            }
+                            else
+                            {
+                                ESP_LOGD(TAG, "Failed to set next mode in NVS!...not restarting");
+                            }
+                            nvs_close(my_handle);
+                        }
+                    }
+                    free(value_search_string);
+                    free(uid_search_string);                    
                 }
             }
         }
@@ -698,7 +782,8 @@ void statusPageWsBroadcastTask(void *pvParameters)
     char *status_string = NULL;
 
     EventBits_t xEventGroupValue;
-    EventBits_t xBitstoWaitFor = NOTIFY_WEBSERVER_STATUS_TASK_CLOSE;
+    EventBits_t xBitsDontNotifyCaller = NOTIFY_WEBSERVER_STATUS_TASK_CLOSE;
+    EventBits_t xBitsNotifyCaller = (NOTIFY_WEBSERVER_STATUS_TASK_CLOSE | NOTIFY_CALLER_WEBSERVER_STATUS_TASK_DONE);
 
     /*Initialise ADC to sample battery cell voltage*/
     init_adc();
@@ -707,17 +792,25 @@ void statusPageWsBroadcastTask(void *pvParameters)
     {
 
         status_string = simulateStatusValues(status_string, &device_peripherals);
-
-        xEventGroupValue = xEventGroupWaitBits(task_sync_event_group, xBitstoWaitFor, pdTRUE, pdFALSE, 0); 
+        /*Take care of race conditions here when waiting on more than one bit*/
+        xEventGroupValue = xEventGroupWaitBits(task_sync_event_group, xBitsNotifyCaller, pdTRUE, pdFALSE, 0); 
 
         if (status_string != NULL)
         {
-            if(xEventGroupValue & xBitstoWaitFor)
+            if((xEventGroupValue & xBitsNotifyCaller) == xBitsNotifyCaller)
             {
                 //Let task finish up cleanly
                 json_free_serialized_string(status_string);
                 xStatusBroadcastHandle = NULL;
+                xEventGroupSetBits(task_sync_event_group, NOTIFY_WEBSERVER_STATUS_TASK_DONE);
                 vTaskDelete(NULL);
+            }
+            else if ((xEventGroupValue & xBitsNotifyCaller) == xBitsDontNotifyCaller)
+            {
+                //Let task finish up cleanly
+                json_free_serialized_string(status_string);
+                xStatusBroadcastHandle = NULL;
+                vTaskDelete(NULL);                
             }
             else
             {
@@ -728,11 +821,18 @@ void statusPageWsBroadcastTask(void *pvParameters)
         }
         else
         {
-            if(xEventGroupValue & xBitstoWaitFor)
+            if((xEventGroupValue & xBitsNotifyCaller) == xBitsNotifyCaller)
             {
                 //Let task finish up cleanly
                 xStatusBroadcastHandle = NULL;
+                xEventGroupSetBits(task_sync_event_group, NOTIFY_WEBSERVER_STATUS_TASK_DONE);
                 vTaskDelete(NULL);
+            }
+            else if ((xEventGroupValue & xBitsNotifyCaller) == xBitsDontNotifyCaller)
+            {
+                //Let task finish up cleanly
+                xStatusBroadcastHandle = NULL;
+                vTaskDelete(NULL);                
             }
             else
             {
@@ -812,7 +912,9 @@ void infaredPageWsBroadcastTask(void *pvParameters)
     esp_err_t ret;
 
     EventBits_t xEventGroupValue;
-    EventBits_t xBitstoWaitFor = NOTIFY_WEBSERVER_THERMAL_VIEWER_TASK_CLOSE;
+    EventBits_t xBitsDontNotifyCaller = NOTIFY_WEBSERVER_THERMAL_VIEWER_TASK_CLOSE;
+    EventBits_t xBitsNotifyCaller = (NOTIFY_WEBSERVER_THERMAL_VIEWER_TASK_CLOSE | NOTIFY_CALLER_WEBSERVER_THERMAL_VIEWER_TASK_DONE);
+
     while (1)
     {
         ret = get_thermal_image(&device_peripherals, image_buffer);
@@ -824,18 +926,24 @@ void infaredPageWsBroadcastTask(void *pvParameters)
             //Do something else
         }
         base64_camera_string = b64_encode_thermal_img(base64_camera_string, image_buffer);
-    
-        xEventGroupValue = xEventGroupWaitBits(task_sync_event_group, xBitstoWaitFor, pdTRUE, pdFALSE, 0);
+        /*Take care of race conditions on bit setting by the caller task*/
+        xEventGroupValue = xEventGroupWaitBits(task_sync_event_group, xBitsNotifyCaller, pdTRUE, pdFALSE, 0);
     
         if (base64_camera_string != NULL)
         { 
-
-            if(xEventGroupValue & xBitstoWaitFor)
+            if((xEventGroupValue & xBitsNotifyCaller) == xBitsNotifyCaller)
             {
                 //Let task finish up cleanly
                 free(base64_camera_string);
                 xInfaredBroadcastHandle = NULL;
+                xEventGroupSetBits(task_sync_event_group, NOTIFY_WEBSERVER_THERMAL_VIEWER_TASK_DONE);
                 vTaskDelete(NULL);
+            }
+            else if ((xEventGroupValue & xBitsNotifyCaller) == xBitsDontNotifyCaller)
+            {
+                //Let task finish up cleanly
+                 xInfaredBroadcastHandle = NULL;
+                vTaskDelete(NULL);                
             }
             else
             {
@@ -846,17 +954,25 @@ void infaredPageWsBroadcastTask(void *pvParameters)
         }
         else
         {
-            if(xEventGroupValue & xBitstoWaitFor)
+            if((xEventGroupValue & xBitsNotifyCaller) == xBitsNotifyCaller)
             {
+                //Let task finish up cleanly
                 xInfaredBroadcastHandle = NULL;
+                xEventGroupSetBits(task_sync_event_group, NOTIFY_WEBSERVER_THERMAL_VIEWER_TASK_DONE);
                 vTaskDelete(NULL);
+            }
+            else if ((xEventGroupValue & xBitsNotifyCaller) == xBitsDontNotifyCaller)
+            {
+                //Let task finish up cleanly
+                xInfaredBroadcastHandle = NULL;
+                vTaskDelete(NULL);                
             }
             else
             {
-                ESP_LOGD(TAG, "Infared page JSON assembler returned NULL");
+                ESP_LOGE(TAG, "Infared page JSON assembler returned NULL");
             }
+            
         }
-
         vTaskDelay(1000 / portTICK_RATE_MS);
     }
     vTaskDelete(NULL);
@@ -866,6 +982,11 @@ void tagPageWsBroadcastTask(void *pvParameters)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
     esp_err_t ret;
+
+    EventBits_t xEventGroupValue;
+    EventBits_t xBitsDontNotifyCaller = NOTIFY_WEBSERVER_TAG_INFO_TASK_CLOSE;
+    EventBits_t xBitsNotifyCaller = (NOTIFY_WEBSERVER_TAG_INFO_TASK_CLOSE | NOTIFY_CALLER_WEBSERVER_TAG_INFO_TASK_DONE);
+
     if(esp_bt_controller_get_status() == ESP_BT_CONTROLLER_STATUS_INITED && esp_bluedroid_get_status() == ESP_BLUEDROID_STATUS_UNINITIALIZED)
     {
         ESP_LOGI(TAG, "Enabling bluetooth controller and bluedroid");
@@ -899,12 +1020,34 @@ void tagPageWsBroadcastTask(void *pvParameters)
         ESP_LOGE(TAG, "Other controller- host state received! Error!");
     }
     
-    // btc_transfer_context()
-    // btc_gap_ble_cb_deep_free()
     while(1)
     {
-        /*Yield control of the CPU briefly for 10ms*/
-        vTaskDelay(10 / portTICK_RATE_MS);
+        /*Take care of race conditions on bit setting by the caller task*/
+        xEventGroupValue = xEventGroupWaitBits(task_sync_event_group, xBitsNotifyCaller, pdTRUE, pdFALSE, 10/portTICK_RATE_MS);
+        if(xEventGroupValue & xBitsNotifyCaller)
+        {
+            if((xEventGroupValue & xBitsNotifyCaller) == xBitsNotifyCaller)
+            {
+                xEventGroupValue = xEventGroupWaitBits(task_sync_event_group, NOTIFY_BT_CALLBACK_DONE, pdTRUE, pdFALSE, 12000/portTICK_RATE_MS);
+                if(xEventGroupValue & NOTIFY_BT_CALLBACK_DONE)
+                {
+                    //Let task finish up cleanly
+                    xTagBroadcastHandle = NULL;
+                    xEventGroupSetBits(task_sync_event_group, NOTIFY_WEBSERVER_TAG_INFO_TASK_DONE);
+                    vTaskDelete(NULL);
+                }
+            }
+            else if ((xEventGroupValue & xBitsNotifyCaller) == xBitsDontNotifyCaller)
+            {
+                xEventGroupValue = xEventGroupWaitBits(task_sync_event_group, NOTIFY_BT_CALLBACK_DONE, pdTRUE, pdFALSE, 12000/portTICK_RATE_MS);
+                if(xEventGroupValue & NOTIFY_BT_CALLBACK_DONE)
+                {
+                    //Let task finish up cleanly
+                    xTagBroadcastHandle = NULL;
+                    vTaskDelete(NULL);
+                }               
+            }
+        }
     }
 }
 
@@ -1125,6 +1268,12 @@ void webServerTask(void *pvParameters)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
 
+    esp_err_t ret=unset_dormant_mode(&(device_peripherals.IAQ_ZH03));
+    ESP_ERROR_CHECK(ret);
+
+    ret = set_QA_mode(&(device_peripherals.IAQ_ZH03));
+    ESP_ERROR_CHECK(ret);
+
     /*Allocate this connection memory to psram*/
     connectionMemory = (char*)malloc(sizeof(RtosConnType) * MAX_CONNECTIONS);
 
@@ -1140,18 +1289,201 @@ void webServerTask(void *pvParameters)
 
     while (1)
     {
-        /*Jusr a delay to yield control of the CPU, to feed the watchdog via the idle task, though this task priority is very low*/
-        vTaskDelay(100 / portTICK_RATE_MS);
+        /*Block for infinitely for 100ms waiting for the webserver close signal to be set*/
+        EventBits_t xEventGroupValue = xEventGroupWaitBits(task_sync_event_group, NOTIFY_WEBSERVER_CLOSE, pdTRUE, pdFALSE, 100/portTICK_RATE_MS);
+        if(xEventGroupValue & NOTIFY_WEBSERVER_CLOSE)
+        {
+            EventBits_t xBitstoWaitFor = 0;
+            if(xStatusBroadcastHandle != NULL)
+            {
+                xBitstoWaitFor = xBitstoWaitFor | NOTIFY_WEBSERVER_STATUS_TASK_DONE;
+                xEventGroupSetBits(task_sync_event_group, NOTIFY_WEBSERVER_STATUS_TASK_CLOSE | 
+                                                          NOTIFY_CALLER_WEBSERVER_STATUS_TASK_DONE);
+            }
+            if(xInfaredBroadcastHandle != NULL)
+            {
+                xBitstoWaitFor = xBitstoWaitFor | NOTIFY_WEBSERVER_THERMAL_VIEWER_TASK_DONE;
+                xEventGroupSetBits(task_sync_event_group, NOTIFY_WEBSERVER_THERMAL_VIEWER_TASK_CLOSE | 
+                                                          NOTIFY_CALLER_WEBSERVER_THERMAL_VIEWER_TASK_DONE);
+            }
+            if(xTagBroadcastHandle != NULL)
+            {
+                xBitstoWaitFor = xBitstoWaitFor | NOTIFY_WEBSERVER_TAG_INFO_TASK_DONE;
+                xEventGroupSetBits(task_sync_event_group, NOTIFY_WEBSERVER_TAG_INFO_TASK_CLOSE | 
+                                                          NOTIFY_CALLER_WEBSERVER_TAG_INFO_TASK_DONE);               
+            }
+            /*Wait for 10 seconds for all tasks to close*/
+            xEventGroupValue = xEventGroupWaitBits(task_sync_event_group, xBitstoWaitFor, pdTRUE, pdTRUE, 10000/portTICK_RATE_MS);
+            if(xEventGroupValue & xBitstoWaitFor)
+            {
+                xEventGroupSetBits(task_sync_event_group, NOTIFY_WEBSERVER_DONE);
+            }
+        }
+
     }
     vTaskDelete(NULL);
 }
-/*
+
 
 void acquisitionTask(void *pvParameters)
 {
+    float temperature = 0.0;;
+    float humidity = 0.0;;
+    hih6030_status_t status;
 
+    int32_t PM_1 = 0;
+    int32_t PM_2_5 = 0;
+    int32_t PM_10 = 0;
+    
+    float sum = 0.0;
+    float avg = 0.0;;
+    float variance = 0.0;;
+    float std_deviation = 0.0;;
+
+    float image_buffer[768] = {0.0};
+
+    /*Switch on fan and block for 10 seconds as bluetooth task is getting tag ID's*/
+    unset_dormant_mode(&(device_peripherals.IAQ_ZH03));
+
+    vTaskDelay(10000/portTICK_RATE_MS);
+    ESP_LOGI(TAG, "Initializing SD card");
+    ESP_LOGI(TAG, "Using SDMMC peripheral");
+    sdmmc_host_t host = SDMMC_HOST_DEFAULT();
+
+    // This initializes the slot without card detect (CD) and write protect (WP) signals.
+    // Modify slot_config.gpio_cd and slot_config.gpio_wp if your board has these signals.
+    sdmmc_slot_config_t slot_config = SDMMC_SLOT_CONFIG_DEFAULT();
+    gpio_set_pull_mode(15, GPIO_FLOATING);
+    gpio_set_pull_mode(2, GPIO_FLOATING);
+    gpio_set_pull_mode(4, GPIO_FLOATING);
+    gpio_set_pull_mode(12, GPIO_FLOATING);
+    gpio_set_pull_mode(13, GPIO_FLOATING);
+
+    esp_vfs_fat_sdmmc_mount_config_t mount_config = 
+    {
+        .format_if_mount_failed = false,
+        .max_files = 5,
+        .allocation_unit_size = 16 * 1024
+    };
+
+    sdmmc_card_t* card;
+    esp_err_t ret = esp_vfs_fat_sdmmc_mount("/sdcard", &host, &slot_config, &mount_config, &card);
+    ESP_ERROR_CHECK(ret);
+    // Card has been initialized, print its properties
+    sdmmc_card_print_info(stdout, card);
+    while(1)
+    {
+        /*Open file by append mode, if file does not exist, create it*/
+        FILE* logfile = fopen("/sdcard/log.csv", "a");
+        if (logfile == NULL)
+        {
+            ESP_LOGE(TAG, "Failed to open file for writing");
+            esp_restart();
+        }
+        int i = fprintf(logfile, "\"Time\",\"Tag_1_count\",\"mean_dBm\",\"variance_dBm\",\"Tag_2_count\",\"mean_dBm\",\"variance_dBm\",\"Mean_temp\",\"Temp_variance\",\"Humidity\",\"Temperature\",\"PM 1\",\"PM 2.5\",\"PM 10\"\n");
+        if (i < 0)
+        {
+            ESP_LOGE(TAG, "ERROR: impossible to write to log file");
+            esp_vfs_fat_sdmmc_unmount();
+            ESP_LOGI(TAG, "Card unmounted");
+        }
+        //unix time
+        if (ds3231_get_time(&(device_peripherals.IAQ_DS3231), &date_time) != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Could not get time from DS3231, returned %s", esp_err_to_name(ret));
+            fprintf(logfile, "\"%d\",", -1);
+        }
+        fprintf(logfile, "\"%u\",", (unsigned int)mktime(&date_time));
+        //Tag_1_count
+        fprintf(logfile, "\"%d\",", 2);
+        //mean_dBm
+        fprintf(logfile, "\"%d\",", 3);
+        //variance_dBm
+        fprintf(logfile, "\"%d\",", 4);
+        //Tag_2_count
+        fprintf(logfile, "\"%d\",", 5);
+        //mean_dBm
+        fprintf(logfile, "\"%d\",", 6);
+        //variance_dBm
+        fprintf(logfile, "\"%d\",", 7);
+
+
+        ret = get_thermal_image(&device_peripherals, image_buffer);
+        if(ret != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Failed to get thermal image, returned %s", esp_err_to_name(ret));
+            //Max_temp
+            fprintf(logfile, "\"%d\",", -1);
+            //Min_temp
+            fprintf(logfile, "\"%d\",", -1);
+            //Mean_temp
+            fprintf(logfile, "\"%d\",", -1);
+            //Temp_variance
+            fprintf(logfile, "\"%d\",", -1);
+        }
+        for(int i=0; i<768; i++)
+        {
+            sum = sum + image_buffer[i];
+        }
+        avg = (sum / 768.0);
+        for (i = 0; i < 768; i++)
+        {
+            sum += pow((image_buffer[i] - avg), 2);
+        }
+        variance = sum / 768.0;
+        //Mean_temp
+        fprintf(logfile, "\"%.2f\",", avg);
+        //Temp_variance
+        fprintf(logfile, "\"%.2f\",", variance);
+
+        while(status != HIH6030_VALID_DATA)
+        {
+            ret = get_temp_humidity(&(device_peripherals.IAQ_HIH6030), &status, &temperature, &humidity);
+            vTaskDelay(100/portTICK_RATE_MS);
+        }
+        if(ret != ESP_OK)
+        {             
+            //Humidity
+            fprintf(logfile, "\"%d\",", -1);
+            //Temperature
+            fprintf(logfile, "\"%d\",", -1);
+        }
+        //Humidity
+        fprintf(logfile, "\"%d\",", (int)humidity);
+        //Temperature
+        fprintf(logfile, "\"%d\",", (int)temperature);
+        
+
+        if(get_particulate_reading_QA_mode(&(device_peripherals.IAQ_ZH03), &PM_1, &PM_2_5, &PM_10) != ESP_OK)
+        {
+            //PM 1
+            fprintf(logfile, "\"%d\",", -1);
+            //PM 2.5
+            fprintf(logfile, "\"%d\",", -1);
+            //PM 10
+            fprintf(logfile, "\"%d\"\n", -1);
+ 
+        }
+        //PM 1
+        fprintf(logfile, "\"%d\",", (int)PM_1);
+        //PM 2.5
+        fprintf(logfile, "\"%d\",", (int)PM_2_5);
+        //PM 10
+        fprintf(logfile, "\"%d\"\n", (int)PM_10);
+        /* end of log file line */
+        fflush(logfile);
+        fclose(logfile);
+        esp_vfs_fat_sdmmc_unmount();
+        ESP_LOGI(TAG, "Unmounted SD card");
+        unset_dormant_mode(&(device_peripherals.IAQ_ZH03));
+        esp_bt_controller_deinit();
+        const int deep_sleep_sec = 10;
+        ESP_LOGI(TAG, "Entering deep sleep for %d seconds", deep_sleep_sec);
+        esp_deep_sleep(1000000LL * deep_sleep_sec);
+        
+    }
 }
-*/
+
 
 void app_main()
 {
@@ -1160,56 +1492,23 @@ void app_main()
     SemaphoreHandle_t i2c_bus_mutex = NULL;
 
     ret = setup_i2c(I2C_MASTER_NUM, I2C_MASTER_FREQ_HZ, I2C_MASTER_SDA_IO, GPIO_PULLUP_DISABLE, I2C_MASTER_SCL_IO, GPIO_PULLUP_DISABLE);
-    if (ret == ESP_OK)
-    {
-        ESP_LOGI(TAG, "Successfully setup I2C peripheral");
-        /*Do something*/
-        ret = setupGpioExpander(&(device_peripherals.IAQ_TCA9534), &i2c_bus_mutex);
-        if (ret != ESP_OK)
-        {
-            ESP_LOGE(TAG, "Could not setup GPIO expander");
-            /*Do something*/
-        }
-        ret = setupTempHumiditySensor(&(device_peripherals.IAQ_HIH6030), &i2c_bus_mutex);
-        if (ret != ESP_OK)
-        {
-            ESP_LOGE(TAG, "Could not setup Temp-humidity sensor");
-            /*Do something*/
-        }
-        ret = setupMLX90640(&device_peripherals, &i2c_bus_mutex);
-        if (ret != ESP_OK)
-        {
-            ESP_LOGE(TAG, "Could not setup thermal camera");
-            /*Do something*/
-        }
-        ret = setupRTC(&(device_peripherals.IAQ_DS3231), &i2c_bus_mutex);
-        if (ret != ESP_OK)
-        {
-            ESP_LOGE(TAG, "Could not setup RTC");
-            /*Do something*/
-        }
-    }
-    else
-    {
-        ESP_LOGE(TAG, "Could not setup I2C peripheral");
-        /* Do something */
-    }
-    
+    ESP_ERROR_CHECK(ret);
+    ESP_LOGI(TAG, "Successfully setup I2C peripheral");
+    ret = setupGpioExpander(&(device_peripherals.IAQ_TCA9534), &i2c_bus_mutex);
+    ESP_ERROR_CHECK(ret);
+    ESP_LOGI(TAG, "Successfully setup I2C based GPIO expander");
+    ret = setupTempHumiditySensor(&(device_peripherals.IAQ_HIH6030), &i2c_bus_mutex);
+    ESP_ERROR_CHECK(ret);
+    ESP_LOGI(TAG, "Successfully setup Temperature-humidity sensor");
+    ret = setupMLX90640(&device_peripherals, &i2c_bus_mutex);
+    ESP_ERROR_CHECK(ret);
+    ret = setupRTC(&(device_peripherals.IAQ_DS3231), &i2c_bus_mutex);
+    ESP_LOGI(TAG, "Successfully setup Real time clock");
+    ESP_ERROR_CHECK(ret);
     ret = setup_particulate_sensor(&(device_peripherals.IAQ_ZH03), ZH03_UART_NUM, ZH03_BAUDRATE, ZH03_TXD_PIN, ZH03_RXD_PIN);
-    if (ret != ESP_OK)
-    {
-        ESP_LOGE(TAG, "Could not setup PM 2.5 sensor");
-        /*Do something*/
-    }
+    ESP_ERROR_CHECK(ret);
+    ESP_LOGI(TAG, "Successfully setup aerosol sensor");
 
-    ret = set_QA_mode(&(device_peripherals.IAQ_ZH03));
-    if (ret != ESP_OK)
-    {
-        ESP_LOGE(TAG, "Could not set QA mode");
-        /*Do something*/
-    }
-
-    /*Erasing NVS for use by bluetooth and Wifi*/
     ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND)
     {
@@ -1229,34 +1528,45 @@ void app_main()
 
     int32_t cd_level;
     TCA9534_get_level(&(device_peripherals.IAQ_TCA9534), TCA9534_SD_CD, &cd_level);
-    if(cd_level == TCA9534_HIGH)
+
+    ret = nvs_open("nvs", NVS_READWRITE, &my_handle);
+    ESP_ERROR_CHECK(ret);
+    int32_t startup_mode;
+    ret = nvs_get_i32(my_handle, "mode", &startup_mode);
+    ESP_ERROR_CHECK(ret);
+    if(startup_mode == acquisition_mode)
     {
-        for(int i=0;i<2;i++)
+        ESP_LOGI(TAG, "Startup mode found set to 'acquisition mode' in NVS");
+        if(cd_level == TCA9534_HIGH)
         {
-            TCA9534_set_level(&(device_peripherals.IAQ_TCA9534), TCA9534_WARN_LED, TCA9534_HIGH);
-            vTaskDelay(1000 / portTICK_RATE_MS);
-            TCA9534_set_level(&(device_peripherals.IAQ_TCA9534), TCA9534_WARN_LED, TCA9534_LOW);
-            vTaskDelay(1000 / portTICK_RATE_MS);
+            ESP_LOGI(TAG, "SD card disconnected, now setting startup mode to 'webserver setup mode'");
+            ret = nvs_set_i32(my_handle, "mode", setup_mode);
+            ESP_ERROR_CHECK(ret);
+            ret = nvs_commit(my_handle);
+            ESP_ERROR_CHECK(ret);
+            nvs_close(my_handle);
+            esp_restart();
         }
-        ESP_LOGI(TAG, "ENTERING SETUP MODE");
+        else
+        {
+            ESP_LOGI(TAG, "SD card connected");
+            for(int i=0;i<2;i++)
+            {
+                TCA9534_set_level(&(device_peripherals.IAQ_TCA9534), TCA9534_WARN_LED, TCA9534_HIGH);
+                vTaskDelay(100 / portTICK_RATE_MS);
+                TCA9534_set_level(&(device_peripherals.IAQ_TCA9534), TCA9534_WARN_LED, TCA9534_LOW);
+                vTaskDelay(100 / portTICK_RATE_MS);
+            }
+            xTaskCreate(acquisitionTask, "acquisitionTask", 16384, NULL, 2, &xacquisitionTaskHandle);
+        }
+    }
+    else
+    {
+        ESP_LOGI(TAG, "Startup mode found set to 'webserver setup mode' in NVS");
         /*Event group for task synchronisation*/
         task_sync_event_group = xEventGroupCreate();
         /*This should Same priority as the bluetooth task, but we will set the antenna access prioritisation in ESP-IDF, of the two*/
         xTaskCreate(webServerTask, "webServerTask", 4096, NULL, 10, &xWebServerTaskHandle);
-    }
-    else
-    {
-        ESP_LOGI(TAG, "ENTERING ACQUISITION MODE");
-        for(int i=0;i<2;i++)
-        {
-            TCA9534_set_level(&(device_peripherals.IAQ_TCA9534), TCA9534_WARN_LED, TCA9534_HIGH);
-            vTaskDelay(100 / portTICK_RATE_MS);
-            TCA9534_set_level(&(device_peripherals.IAQ_TCA9534), TCA9534_WARN_LED, TCA9534_LOW);
-            vTaskDelay(100 / portTICK_RATE_MS);
-        }
-            const int deep_sleep_sec = 10;
-            ESP_LOGI(TAG, "Entering deep sleep for %d seconds", deep_sleep_sec);
-            esp_deep_sleep(1000000LL * deep_sleep_sec);
     }
     while (1)
     {
