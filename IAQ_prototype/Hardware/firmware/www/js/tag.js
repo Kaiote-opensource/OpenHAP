@@ -13,6 +13,9 @@ var lib = new LocalStorageDB('documents');
 
 var tag = {
     value: function () {
+        if(lib.get()['devices'].length > 1){
+            lib.remove('devices', 0)
+        }
         return lib.get()['devices'];
     },
     playFrequency: 1000,
