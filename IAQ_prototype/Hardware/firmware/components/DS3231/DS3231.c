@@ -77,7 +77,7 @@ esp_err_t ds3231_init(DS3231* DS3231_inst, int address, i2c_port_t port, Semapho
     return ESP_ERR_INVALID_ARG;
 }
 
-static esp_err_t ds3231_i2c_read(DS3231* DS3231_inst, const void *out_data, size_t out_size, void *in_data, size_t in_size)
+static esp_err_t ds3231_i2c_read(const DS3231* DS3231_inst, const void *out_data, size_t out_size, void *in_data, size_t in_size)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
     esp_err_t ret;
@@ -112,7 +112,7 @@ static inline esp_err_t ds3231_i2c_read_reg(const DS3231* DS3231_inst, uint8_t r
     return ds3231_i2c_read(DS3231_inst, &reg, 1, in_data, in_size);
 }
 
-esp_err_t ds3231_i2c_write(DS3231* DS3231_inst, const void *out_reg, size_t out_reg_size, const void *out_data, size_t out_size)
+esp_err_t ds3231_i2c_write(const DS3231* DS3231_inst, const void *out_reg, size_t out_reg_size, const void *out_data, size_t out_size)
 {
     if (DS3231_inst == NULL || out_data == NULL || out_size == 0)
     {
