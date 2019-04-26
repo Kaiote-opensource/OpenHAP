@@ -53,72 +53,88 @@ int MLX90640_GetFrameData(MLX90640 *MLX90640_inst, uint16_t frameData[][834])
 
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
     uint16_t dataReady = 0;
-    uint16_t page_zero = 1;
+    uint16_t page = 1;
     uint16_t controlRegister1;
     uint16_t statusRegister;
     int error = 1;
-//    uint8_t cnt = 0;
-    
-    while(dataReady == 0 && page_zero != 0)
+    uint8_t cnt = 0;
+
+    MLX90640_I2CRead(MLX90640_inst, 0x800D, 1, &controlRegister1);
+
+    if(controlRegister1 != 0x1901)
     {
+        ESP_LOGE(TAG, "config reg 0x800D is not 0x1901, not getting frame");
+        return ESP_FAIL;
+    }
+    
+    while(dataReady == 0 && page != 0)
+    {
+        ESP_LOGI(TAG, "Polling for subframe 0");
         error = MLX90640_I2CRead(MLX90640_inst, 0x8000, 1, &statusRegister);
         if(error != 0)
         {
+            ESP_LOGE(TAG, "Could not read status register. I2C error");
             return error;
         }    
         dataReady = statusRegister & 0x0008;
-        page_zero = statusRegister & 0x0001;
+        page = statusRegister & 0x0001;
+        ESP_LOGD(TAG, "Status register is [0x%04X]", statusRegister);
     }
 
-    ESP_LOGD(TAG, "Obtained new measurement with page zero");
+    ESP_LOGD(TAG, "Obtained new measurement with subframe 0");
 
     error = MLX90640_I2CWrite(MLX90640_inst, 0x8000, 0x0030);
     if(error == -1)
     {
         return error;
     }
-        
+    /*Get first frame*/
     error = MLX90640_I2CRead(MLX90640_inst, 0x0400, 832, frameData[0]); 
     if(error != 0)
     {
+        ESP_LOGE(TAG, "Could not obtain frame at RAM 0x400");
         return error;
     }
-               
+    /*Get status register state and append to frame for further calculations*/
     error = MLX90640_I2CRead(MLX90640_inst, 0x8000, 1, &statusRegister);
     if(error != 0)
     {
         return error;
     }    
-    dataReady = statusRegister & 0x0008;
-       
+
+    /*Get control register state and append to frame for further calculations*/
     error = MLX90640_I2CRead(MLX90640_inst, 0x800D, 1, &controlRegister1);
-    frameData[0][832] = controlRegister1;
-    frameData[0][833] = statusRegister & 0x0001;
-    
     if(error != 0)
     {
+        ESP_LOGE(TAG, "Could not read control register data");
         return error;
     }
+    ESP_LOGD(TAG, "Control register data appended to subframe 0 is 0x%04X", controlRegister1);
+    frameData[0][832] = controlRegister1;
+    /*Append final frame byte to show only the bit frame number*/
+    frameData[0][833] = statusRegister & 0x0001;
+    ESP_LOGD(TAG, "frame number appended to subframe 0 is 0x%04X", frameData[0][833]);
 
     /*Poll sensor to obtain subpage one*/
-
     dataReady = 0;
-    page_zero = 0;
+    page = 0;
     error = 1;
 
-    while(dataReady == 0 && page_zero != 1)
+    while(dataReady == 0 && page != 1)
     {
+        ESP_LOGI(TAG, "Polling for subframe 1");
         error = MLX90640_I2CRead(MLX90640_inst, 0x8000, 1, &statusRegister);
         if(error != 0)
         {
+            ESP_LOGE(TAG, "Could not read status register. I2C error");
             return error;
         }    
         dataReady = statusRegister & 0x0008;
-        page_zero = statusRegister & 0x0001;
+        page = statusRegister & 0x0001;
         ESP_LOGD(TAG, "Status register is [0x%04X]", statusRegister);
     }
 
-    ESP_LOGD(TAG, "Obtained new measurement with page one");
+    ESP_LOGD(TAG, "Obtained new measurement with subframe 1");
 
 
     error = MLX90640_I2CWrite(MLX90640_inst, 0x8000, 0x0030);
@@ -137,18 +153,19 @@ int MLX90640_GetFrameData(MLX90640 *MLX90640_inst, uint16_t frameData[][834])
     if(error != 0)
     {
         return error;
-    }    
-    dataReady = statusRegister & 0x0008; 
+    } 
 
     error = MLX90640_I2CRead(MLX90640_inst, 0x800D, 1, &controlRegister1);
-    frameData[1][832] = controlRegister1;
-    frameData[1][833] = statusRegister & 0x0001;
-    
     if(error != 0)
     {
+        ESP_LOGE(TAG, "Could not read control register data");
         return error;
     }
-    
+    ESP_LOGD(TAG, "Control register data appended to subframe 0 is 0x%04X", controlRegister1);
+    frameData[1][832] = controlRegister1;
+    /*Append final frame byte to show only the bit frame number*/
+    frameData[1][833] = statusRegister & 0x0001;
+    ESP_LOGD(TAG, "frame number appended to subframe 1 is 0x%04X", frameData[1][833]);
     return 0; 
 }
 

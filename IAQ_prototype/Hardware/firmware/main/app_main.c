@@ -81,6 +81,8 @@
 #include "esp_eddystone_protocol.h"
 #include "esp_eddystone_api.h"
 
+#include "statistics.h"
+
 #include <sys/unistd.h>
 #include <sys/stat.h>
 #include "esp_vfs_fat.h"
@@ -96,7 +98,7 @@
 #define I2C_MASTER_SCL_IO    19
 #define I2C_MASTER_SDA_IO    21
 #define I2C_MASTER_NUM      I2C_NUM_0
-#define I2C_MASTER_FREQ_HZ  100000
+#define I2C_MASTER_FREQ_HZ  400000
 
 #define HIH6030_ADDR        0x27
 #define MLX90640_ADDR       0x33
@@ -471,7 +473,7 @@ static void myWebsocketRecv(Websock *ws, char *data, int len, int flags)
                                     vTaskDelay(3000/portTICK_RATE_MS);
                                     xEventGroupSetBits( task_sync_event_group,  NOTIFY_WEBSERVER_CLOSE);
                                     /*Block until the webserver finishes cleanly...for the maximum available time*/
-                                    EventBits_t xEventGroupValue = xEventGroupWaitBits(task_sync_event_group, NOTIFY_WEBSERVER_DONE, pdTRUE, pdFALSE, portMAX_DELAY);
+                                    EventBits_t xEventGroupValue = xEventGroupWaitBits(task_sync_event_group, NOTIFY_WEBSERVER_DONE, pdTRUE, pdFALSE, 5000/portTICK_RATE_MS);
                                     if(xEventGroupValue & NOTIFY_WEBSERVER_DONE)
                                     {
                                         ESP_LOGI(TAG, "Webserver closed cleanly, restarting...");                                         
@@ -479,8 +481,9 @@ static void myWebsocketRecv(Websock *ws, char *data, int len, int flags)
                                     }
                                     else
                                     {
+                                        //TODO sort this part to restart 
                                         ESP_LOGI(TAG, "Failed to close webserver cleanly in time, restarting back to webserver!");
-                                        ret = nvs_set_i32(my_handle, "mode", setup_mode);
+                                        ret = nvs_set_i32(my_handle, "mode", acquisition_mode);
                                         /*As the webserver may be in an unstable state due to incomplete closing, just restart in case of a failure here*/
                                         ESP_ERROR_CHECK(ret);
                                         ret = nvs_commit(my_handle);
@@ -658,6 +661,7 @@ esp_err_t get_thermal_image(peripherals_struct *device_peripherals, float* image
         MLX90640_I2CRead(&(device_peripherals->IAQ_MLX90640), 0x800D, 1, &reg_val);
         if(reg_val != 0x1901)
         {
+            ESP_LOGE(TAG, "Config reg 0x800D is not 0x1901, value found 0x%04X...attempting I2C Config reg 0x800D write to reconfigure", reg_val);
             while(reg_val != 0x1901 && cnt < 5)
             {
                 MLX90640_I2CWrite(&(device_peripherals->IAQ_MLX90640), 0x800D, 0x1901);
@@ -670,13 +674,14 @@ esp_err_t get_thermal_image(peripherals_struct *device_peripherals, float* image
                 ESP_LOGE(TAG, "Failed to set default value to config reg 0x800D");
                 return ESP_FAIL;
             }
+            ESP_LOGI(TAG, "Successfully set config reg to 0x800D");
         }
         if(MLX90640_GetFrameData(&(device_peripherals->IAQ_MLX90640), mlx90640Frame) != 0)
         {
             ESP_LOGE(TAG, "Failed to get subpage frames for full image composition");
             return ESP_FAIL;
         }
-        tr = MLX90640_GetTa(mlx90640Frame[0], &(device_peripherals->MLX90640params)) - ta_shift;
+            tr = MLX90640_GetTa(mlx90640Frame[0], &(device_peripherals->MLX90640params)) - ta_shift;
         MLX90640_CalculateTo(mlx90640Frame[0], &(device_peripherals->MLX90640params), emissivity, tr, image_buffer);
         tr = MLX90640_GetTa(mlx90640Frame[1], &(device_peripherals->MLX90640params)) - ta_shift;
         MLX90640_CalculateTo(mlx90640Frame[1], &(device_peripherals->MLX90640params), emissivity, tr, image_buffer);
@@ -973,6 +978,7 @@ void infaredPageWsBroadcastTask(void *pvParameters)
             }
             
         }
+        /*Refresh rate - 20% as per datasheet*/
         vTaskDelay(1000 / portTICK_RATE_MS);
     }
     vTaskDelete(NULL);
@@ -1290,36 +1296,39 @@ void webServerTask(void *pvParameters)
     while (1)
     {
         /*Block for infinitely for 100ms waiting for the webserver close signal to be set*/
-        EventBits_t xEventGroupValue = xEventGroupWaitBits(task_sync_event_group, NOTIFY_WEBSERVER_CLOSE, pdTRUE, pdFALSE, 100/portTICK_RATE_MS);
+        EventBits_t xEventGroupValue = xEventGroupWaitBits(task_sync_event_group, NOTIFY_WEBSERVER_CLOSE, pdTRUE, pdFALSE,  1000/portTICK_RATE_MS);
         if(xEventGroupValue & NOTIFY_WEBSERVER_CLOSE)
         {
+            ESP_LOGI(TAG, "Webserver task received close event");
             EventBits_t xBitstoWaitFor = 0;
             if(xStatusBroadcastHandle != NULL)
             {
+                ESP_LOGI(TAG, "Sending close event to status broadcast task");
                 xBitstoWaitFor = xBitstoWaitFor | NOTIFY_WEBSERVER_STATUS_TASK_DONE;
                 xEventGroupSetBits(task_sync_event_group, NOTIFY_WEBSERVER_STATUS_TASK_CLOSE | 
                                                           NOTIFY_CALLER_WEBSERVER_STATUS_TASK_DONE);
             }
             if(xInfaredBroadcastHandle != NULL)
             {
+                ESP_LOGI(TAG, "Sending close event to infared viewer broadcast task");
                 xBitstoWaitFor = xBitstoWaitFor | NOTIFY_WEBSERVER_THERMAL_VIEWER_TASK_DONE;
                 xEventGroupSetBits(task_sync_event_group, NOTIFY_WEBSERVER_THERMAL_VIEWER_TASK_CLOSE | 
                                                           NOTIFY_CALLER_WEBSERVER_THERMAL_VIEWER_TASK_DONE);
             }
             if(xTagBroadcastHandle != NULL)
             {
+                ESP_LOGI(TAG, "Sending close event to Tag info broadcast task");
                 xBitstoWaitFor = xBitstoWaitFor | NOTIFY_WEBSERVER_TAG_INFO_TASK_DONE;
                 xEventGroupSetBits(task_sync_event_group, NOTIFY_WEBSERVER_TAG_INFO_TASK_CLOSE | 
                                                           NOTIFY_CALLER_WEBSERVER_TAG_INFO_TASK_DONE);               
             }
-            /*Wait for 10 seconds for all tasks to close*/
+            /*Block for 10 seconds for all tasks to close*/
             xEventGroupValue = xEventGroupWaitBits(task_sync_event_group, xBitstoWaitFor, pdTRUE, pdTRUE, 10000/portTICK_RATE_MS);
             if(xEventGroupValue & xBitstoWaitFor)
             {
                 xEventGroupSetBits(task_sync_event_group, NOTIFY_WEBSERVER_DONE);
             }
         }
-
     }
     vTaskDelete(NULL);
 }
@@ -1335,11 +1344,6 @@ void acquisitionTask(void *pvParameters)
     int32_t PM_2_5 = 0;
     int32_t PM_10 = 0;
     
-    float sum = 0.0;
-    float avg = 0.0;;
-    float variance = 0.0;;
-    float std_deviation = 0.0;;
-
     float image_buffer[768] = {0.0};
 
     /*Switch on fan and block for 10 seconds as bluetooth task is getting tag ID's*/
@@ -1371,29 +1375,59 @@ void acquisitionTask(void *pvParameters)
     ESP_ERROR_CHECK(ret);
     // Card has been initialized, print its properties
     sdmmc_card_print_info(stdout, card);
+    const char* logile_name = "/sdcard/final.csv";
     while(1)
     {
         /*Open file by append mode, if file does not exist, create it*/
-        FILE* logfile = fopen("/sdcard/log.csv", "a");
+        int exists= 0;
+        struct stat st;
+        if (stat(logile_name, &st) == 0)
+        {
+            /*File exists, set integer to be checked*/
+            ESP_LOGE(TAG, "File does not exist, creating it...");
+            exists = 0; 
+        }
+        else
+        {
+            /*File exists, set integer to be checked*/
+            ESP_LOGE(TAG, "File exists, appending to file");
+            exists = 1;           
+        }
+        
+        FILE* logfile = fopen(logile_name, "a");
         if (logfile == NULL)
         {
+            
             ESP_LOGE(TAG, "Failed to open file for writing");
+            esp_vfs_fat_sdmmc_unmount();
+            ESP_LOGI(TAG, "Card unmounted");
             esp_restart();
         }
-        int i = fprintf(logfile, "\"Time\",\"Tag_1_count\",\"mean_dBm\",\"variance_dBm\",\"Tag_2_count\",\"mean_dBm\",\"variance_dBm\",\"Mean_temp\",\"Temp_variance\",\"Humidity\",\"Temperature\",\"PM 1\",\"PM 2.5\",\"PM 10\"\n");
+        int i;
+        if(exists)
+        {
+                    //Get time
+            if (ds3231_get_time(&(device_peripherals.IAQ_DS3231), &date_time) != ESP_OK)
+            {
+                ESP_LOGE(TAG, "Could not get time from DS3231, returned %s", esp_err_to_name(ret));
+                i = fprintf(logfile, "\"%d\",", -1);
+            }
+            else
+            {
+                i = fprintf(logfile, "\"%u\",", (unsigned int)mktime(&date_time));
+            }
+        }
+        else
+        {
+            i = fprintf(logfile, "\"Time\",\"Tag_1_count\",\"mean_dBm\",\"variance_dBm\",\"Tag_2_count\",\"Mean_dBm\",\"Variance_dBm\",\"Mean_temp\",\"Max_temp\",\"Min_temp\",\"Temp_variance\",\"Temp_stddev\",\"Humidity\",\"Temperature\",\"PM 1\",\"PM 2.5\",\"PM 10\"\n");
+        }
         if (i < 0)
         {
             ESP_LOGE(TAG, "ERROR: impossible to write to log file");
             esp_vfs_fat_sdmmc_unmount();
             ESP_LOGI(TAG, "Card unmounted");
+            esp_restart();
         }
-        //unix time
-        if (ds3231_get_time(&(device_peripherals.IAQ_DS3231), &date_time) != ESP_OK)
-        {
-            ESP_LOGE(TAG, "Could not get time from DS3231, returned %s", esp_err_to_name(ret));
-            fprintf(logfile, "\"%d\",", -1);
-        }
-        fprintf(logfile, "\"%u\",", (unsigned int)mktime(&date_time));
         //Tag_1_count
         fprintf(logfile, "\"%d\",", 2);
         //mean_dBm
@@ -1406,8 +1440,9 @@ void acquisitionTask(void *pvParameters)
         fprintf(logfile, "\"%d\",", 6);
         //variance_dBm
         fprintf(logfile, "\"%d\",", 7);
-
-
+        //Get two images prior as the first image is usually garbled
+        get_thermal_image(&device_peripherals, image_buffer);
+        get_thermal_image(&device_peripherals, image_buffer);
         ret = get_thermal_image(&device_peripherals, image_buffer);
         if(ret != ESP_OK)
         {
@@ -1421,26 +1456,63 @@ void acquisitionTask(void *pvParameters)
             //Temp_variance
             fprintf(logfile, "\"%d\",", -1);
         }
-        for(int i=0; i<768; i++)
+//\"Mean_temp\",\"Temp_max\",\"Temp_min\",\"Temp_variance\",,\"Temp_stddev\"
+        float avg;
+        if(meanValue(image_buffer, 768, &avg) == ESP_OK)
         {
-            sum = sum + image_buffer[i];
+            fprintf(logfile, "\"%.2f\",", avg);
+            ESP_LOGI(TAG, "Image mean value is %.2f degree celsius", avg);
         }
-        avg = (sum / 768.0);
-        for (i = 0; i < 768; i++)
+        else
         {
-            sum += pow((image_buffer[i] - avg), 2);
+            fprintf(logfile, "\"%d\",", -1);
+            ESP_LOGI(TAG, "Could not obtain image mean");            
         }
-        variance = sum / 768.0;
-        //Mean_temp
-        fprintf(logfile, "\"%.2f\",", avg);
-        //Temp_variance
-        fprintf(logfile, "\"%.2f\",", variance);
-
-        while(status != HIH6030_VALID_DATA)
+        float max;
+        if(floatMaxValue(image_buffer, 768, &max) == ESP_OK)
         {
-            ret = get_temp_humidity(&(device_peripherals.IAQ_HIH6030), &status, &temperature, &humidity);
-            vTaskDelay(100/portTICK_RATE_MS);
+            fprintf(logfile, "\"%.2f\",", max);
+            ESP_LOGI(TAG, "Image max value is %.2f degree celsius", max);
         }
+        else
+        {
+            fprintf(logfile, "\"%d\",", -1);
+            ESP_LOGI(TAG, "Could not obtain image max value");            
+        }
+        float min;
+        if(floatMinValue(image_buffer, 768, &min) == ESP_OK)
+        {
+            fprintf(logfile, "\"%.2f\",", min);
+            ESP_LOGI(TAG, "Image min value is %.2f degree celsius", min);
+        }
+        else
+        {
+            fprintf(logfile, "\"%d\",", -1);
+            ESP_LOGI(TAG, "Could not obtain image min value");            
+        }
+        float var;
+        if(variance(image_buffer, 768, &var) == ESP_OK)
+        {
+            fprintf(logfile, "\"%.2f\",", var);
+            ESP_LOGI(TAG, "Image variance is +/-%.2f degree celsius", var);
+        }
+        else
+        {
+            fprintf(logfile, "\"%d\",", -1);
+            ESP_LOGI(TAG, "Could not obtain image variance");            
+        }
+        float std_deviation;
+        if(stddev(image_buffer, 768, &std_deviation) == ESP_OK)
+        {
+            fprintf(logfile, "\"%.2f\",", std_deviation);
+            ESP_LOGI(TAG, "Image standard deviation is +/-%.2f degree celsius", std_deviation);
+        }
+        else
+        {
+            fprintf(logfile, "\"%d\",", -1);
+            ESP_LOGI(TAG, "Could not obtain image standard deviation");            
+        }
+        ret = get_temp_humidity(&(device_peripherals.IAQ_HIH6030), &status, &temperature, &humidity);
         if(ret != ESP_OK)
         {             
             //Humidity
@@ -1449,11 +1521,9 @@ void acquisitionTask(void *pvParameters)
             fprintf(logfile, "\"%d\",", -1);
         }
         //Humidity
-        fprintf(logfile, "\"%d\",", (int)humidity);
+        fprintf(logfile, "\"%.2f\",", humidity);
         //Temperature
-        fprintf(logfile, "\"%d\",", (int)temperature);
-        
-
+        fprintf(logfile, "\"%.2f\",", temperature);
         if(get_particulate_reading_QA_mode(&(device_peripherals.IAQ_ZH03), &PM_1, &PM_2_5, &PM_10) != ESP_OK)
         {
             //PM 1
@@ -1462,7 +1532,6 @@ void acquisitionTask(void *pvParameters)
             fprintf(logfile, "\"%d\",", -1);
             //PM 10
             fprintf(logfile, "\"%d\"\n", -1);
- 
         }
         //PM 1
         fprintf(logfile, "\"%d\",", (int)PM_1);
@@ -1475,12 +1544,11 @@ void acquisitionTask(void *pvParameters)
         fclose(logfile);
         esp_vfs_fat_sdmmc_unmount();
         ESP_LOGI(TAG, "Unmounted SD card");
-        unset_dormant_mode(&(device_peripherals.IAQ_ZH03));
+        set_dormant_mode(&(device_peripherals.IAQ_ZH03));
         esp_bt_controller_deinit();
         const int deep_sleep_sec = 10;
         ESP_LOGI(TAG, "Entering deep sleep for %d seconds", deep_sleep_sec);
-        esp_deep_sleep(1000000LL * deep_sleep_sec);
-        
+        esp_deep_sleep(1000000LL * deep_sleep_sec); 
     }
 }
 
@@ -1502,6 +1570,7 @@ void app_main()
     ESP_LOGI(TAG, "Successfully setup Temperature-humidity sensor");
     ret = setupMLX90640(&device_peripherals, &i2c_bus_mutex);
     ESP_ERROR_CHECK(ret);
+    ESP_LOGI(TAG, "Successfully setup infared thermal camera");
     ret = setupRTC(&(device_peripherals.IAQ_DS3231), &i2c_bus_mutex);
     ESP_LOGI(TAG, "Successfully setup Real time clock");
     ESP_ERROR_CHECK(ret);
@@ -1531,6 +1600,7 @@ void app_main()
 
     ret = nvs_open("nvs", NVS_READWRITE, &my_handle);
     ESP_ERROR_CHECK(ret);
+
     int32_t startup_mode;
     ret = nvs_get_i32(my_handle, "mode", &startup_mode);
     ESP_ERROR_CHECK(ret);
