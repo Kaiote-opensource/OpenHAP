@@ -28,6 +28,6 @@ typedef enum {
 
 /*Notify the bluetooth task and any other tasks of importance that the acquisition window has closed*/
 #define NOTIFY_ACQUISITION_WINDOW_DONE ( 1UL << 12UL )
-#define CURRENT_MODE_ACQUISITION ( 1UL << 12UL )
+#define CURRENT_MODE_ACQUISITION ( 1UL << 13UL )
 
 #endif
