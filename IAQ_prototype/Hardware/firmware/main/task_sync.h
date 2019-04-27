@@ -25,4 +25,9 @@ typedef enum {
 #define NOTIFY_WEBSERVER_THERMAL_VIEWER_TASK_DONE ( 1UL << 9UL )
 #define NOTIFY_WEBSERVER_TAG_INFO_TASK_DONE ( 1UL << 10UL )
 #define NOTIFY_WEBSERVER_DONE ( 1UL << 11UL )
+
+/*Notify the bluetooth task and any other tasks of importance that the acquisition window has closed*/
+#define NOTIFY_ACQUISITION_WINDOW_DONE ( 1UL << 12UL )
+#define CURRENT_MODE_ACQUISITION ( 1UL << 12UL )
+
 #endif

@@ -1,3 +1,6 @@
+#ifndef _STATISTICS_H_
+#define _STATISTICS_H_
+
 #include <stdint.h>
 #include <stddef.h>
 #include "esp_err.h"
@@ -21,3 +24,5 @@ esp_err_t meanValue(float myArray[], size_t size, float* meanValuePtr);
 esp_err_t variance(float myArray[], size_t size, float* varianceValuePtr);
 
 esp_err_t stddev(float myArray[], size_t size, float* stddevPtr);
+
+#endif

@@ -1,0 +1,12 @@
+#ifndef _DEV_SETTINGS_H_
+#define _DEV_SETTINGS_H_
+
+#define ACQUISITION_FAN_SETUP_DURATION 10
+
+#define SD_CARD_MOUNT_POINT "/sdcard"
+
+#define BLE_SCAN_DURATION 10
+
+#define DEEP_SLEEP_SEC 30
+
+#endif

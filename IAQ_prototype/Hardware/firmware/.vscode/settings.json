@@ -3,6 +3,12 @@
     "files.associations": {
         "esp_system.h": "c",
         "stdlib.h": "c",
-        "esp_gap_ble_api.h": "c"
+        "esp_gap_ble_api.h": "c",
+        "httpd-freertos.h": "c",
+        "type_traits": "c",
+        "chrono": "c",
+        "btc_manage.h": "c",
+        "array": "c",
+        "string_view": "c"
     }
 }

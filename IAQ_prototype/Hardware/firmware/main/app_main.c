@@ -64,6 +64,7 @@
 #include "user_commands.h"
 
 #include "task_sync.h"
+#include "dev_settings.h"
 
 #include "esp_sleep.h"
 #include "esp_system.h"
@@ -149,6 +150,14 @@ static TaskHandle_t xStatusBroadcastHandle = NULL;
 static TaskHandle_t xInfaredBroadcastHandle = NULL;
 static TaskHandle_t xTagBroadcastHandle = NULL;
 
+size_t FCBDB62F1727_count = 0;
+int64_t FCBDB62F1727_cumsum_RSSI = 0;
+float FCBDB62F1727_running_RSSI_mean = 0;
+
+size_t F2416138F240_count = 0;
+int64_t F2416138F240_cumsum_RSSI = 0;
+float F2416138F240_running_RSSI_mean = 0;
+
 typedef struct
 {
     Websock* ws;
@@ -205,36 +214,76 @@ static void esp_eddystone_show_inform(const esp_eddystone_result_t *res, const e
     {
     case EDDYSTONE_FRAME_TYPE_TLM:
     {
-        sprintf(mac_buffer, "%02X%02X%02X%02X%02X%02X", scan_result->scan_rst.bda[0],
-                                                        scan_result->scan_rst.bda[1],
-                                                        scan_result->scan_rst.bda[2],
-                                                        scan_result->scan_rst.bda[3],
-                                                        scan_result->scan_rst.bda[4],
-                                                        scan_result->scan_rst.bda[5]);
-        JSON_Value *root_value = json_value_init_object();
-        JSON_Object *root_object = json_value_get_object(root_value);
-        json_object_set_number(root_object, "RSSI", scan_result->scan_rst.rssi);
-        json_object_set_number(root_object, "BATT_VOLTAGE", res->inform.tlm.battery_voltage);
-        json_object_set_number(root_object, "TIME", res->inform.tlm.time);
-        json_object_set_string(root_object, "MAC", mac_buffer);
-        tag_info_string = json_serialize_to_string(root_value);
-        ESP_LOGI(TAG, "%s", tag_info_string);
-        json_value_free(root_value);
-        ESP_LOGI(TAG, "Tag info string length is %d bytes", strlen(tag_info_string));
-        if (tag_info_string != NULL)
+        ESP_LOGI(TAG, " Webserver setup mode bluetooth handler entry");
+        if ((xEventGroupGetBits(task_sync_event_group) & CURRENT_MODE_ACQUISITION) != CURRENT_MODE_ACQUISITION)
         {
-            connections = cgiWebsockBroadcast(&httpdFreertosInstance.httpdInstance, tag_cgi_resource_string, tag_info_string, strlen(tag_info_string), WEBSOCK_FLAG_NONE);
-            json_free_serialized_string(tag_info_string);
-            ESP_LOGD(TAG, "Broadcast sent to %d connections", connections);
+            sprintf(mac_buffer, "%02X%02X%02X%02X%02X%02X", scan_result->scan_rst.bda[0],
+                                                            scan_result->scan_rst.bda[1],
+                                                            scan_result->scan_rst.bda[2],
+                                                            scan_result->scan_rst.bda[3],
+                                                            scan_result->scan_rst.bda[4],
+                                                            scan_result->scan_rst.bda[5]);
+            JSON_Value *root_value = json_value_init_object();
+            JSON_Object *root_object = json_value_get_object(root_value);
+            json_object_set_number(root_object, "RSSI", scan_result->scan_rst.rssi);
+            json_object_set_number(root_object, "BATT_VOLTAGE", res->inform.tlm.battery_voltage);
+            json_object_set_number(root_object, "TIME", res->inform.tlm.time);
+            json_object_set_string(root_object, "MAC", mac_buffer);
+            tag_info_string = json_serialize_to_string(root_value);
+            ESP_LOGI(TAG, "%s", tag_info_string);
+            json_value_free(root_value);
+            ESP_LOGI(TAG, "Tag info string length is %d bytes", strlen(tag_info_string));
+            if (tag_info_string != NULL)
+            {
+                connections = cgiWebsockBroadcast(&httpdFreertosInstance.httpdInstance, tag_cgi_resource_string, tag_info_string, strlen(tag_info_string), WEBSOCK_FLAG_NONE);
+                json_free_serialized_string(tag_info_string);
+                ESP_LOGD(TAG, "Broadcast sent to %d connections", connections);
+            }
+            else
+            {
+                ESP_LOGD(TAG, " Tag info page JSON assembler returned NULL");
+            }
+            break;
         }
-        else
+        else if((xEventGroupGetBits(task_sync_event_group) & CURRENT_MODE_ACQUISITION) == CURRENT_MODE_ACQUISITION)
         {
-            ESP_LOGD(TAG, " Tag info page JSON assembler returned NULL");
-        }
-        break;
+            ESP_LOGI(TAG, " Acquisition mode bluetooth handler entry");
+            sprintf(mac_buffer, "%02X%02X%02X%02X%02X%02X", scan_result->scan_rst.bda[0],
+                                                scan_result->scan_rst.bda[1],
+                                                scan_result->scan_rst.bda[2],
+                                                scan_result->scan_rst.bda[3],
+                                                scan_result->scan_rst.bda[4],
+                                                scan_result->scan_rst.bda[5]);
+
+            if(strcmp(mac_buffer, "FCBDB62F1727") == 0)
+            {
+                ESP_LOGI(TAG, " Gotten 0xFCBDB62F1727");
+                FCBDB62F1727_count++;
+                ESP_LOGI(TAG, "FCBDB62F1727 TLM observation received, total: %d", FCBDB62F1727_count);
+                FCBDB62F1727_cumsum_RSSI += (scan_result->scan_rst.rssi);
+                ESP_LOGI(TAG, "FCBDB62F1727 TLM observation RSSI is %d dBm", scan_result->scan_rst.rssi);        
+                FCBDB62F1727_count ==0?(FCBDB62F1727_running_RSSI_mean = 0):(FCBDB62F1727_running_RSSI_mean = (float)FCBDB62F1727_cumsum_RSSI/FCBDB62F1727_count);
+                ESP_LOGI(TAG, "FCBDB62F1727 TLM running RSSI mean is %f dBm", FCBDB62F1727_running_RSSI_mean);  
+            }
+            else if(strcmp(mac_buffer, "F2416138F240") == 0)
+            {
+                ESP_LOGI(TAG, " Gotten 0xF2416138F240");
+                F2416138F240_count++;
+                ESP_LOGI(TAG, "F2416138F240 TLM observation received, total: %d", F2416138F240_count);
+                F2416138F240_cumsum_RSSI += (scan_result->scan_rst.rssi);
+                ESP_LOGI(TAG, "F2416138F240 TLM observation RSSI is %d dBm", scan_result->scan_rst.rssi);        
+                F2416138F240_count == 0? (F2416138F240_running_RSSI_mean = 0):(F2416138F240_running_RSSI_mean = (float)F2416138F240_cumsum_RSSI/F2416138F240_count);
+                ESP_LOGI(TAG, "F2416138F240 TLM running RSSI mean is %f dBm", F2416138F240_running_RSSI_mean);  
+            }
+            }
+            else
+            {
+                ESP_LOGI(TAG, " Gotten unregistered tag %s", mac_buffer);
+            }
+            break;
     }
     default:
-        ESP_LOGD(TAG, "Other frame type received");
+        ESP_LOGW(TAG, "Other frame type received");
         break;
     }
 }
@@ -245,14 +294,13 @@ static void esp_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *par
     esp_err_t ret;
 
     EventBits_t xEventGroupValue;
-    EventBits_t xBitstoWaitFor = NOTIFY_WEBSERVER_TAG_INFO_TASK_CLOSE;
+    EventBits_t xBitstoWaitFor = NOTIFY_WEBSERVER_TAG_INFO_TASK_CLOSE | NOTIFY_ACQUISITION_WINDOW_DONE;
 
     switch (event)
     {
     case ESP_GAP_BLE_SCAN_PARAM_SET_COMPLETE_EVT:
     {
-        uint32_t duration = 20;
-        ret = esp_ble_gap_start_scanning(duration);
+        ret = esp_ble_gap_start_scanning(BLE_SCAN_DURATION);
         if(ret != ESP_OK)
         {
             ESP_LOGE(TAG, "Scanning returned error!");
@@ -302,26 +350,21 @@ static void esp_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *par
         {
             ESP_LOGI(TAG, "Scan is complete!");
             xEventGroupValue = xEventGroupWaitBits(task_sync_event_group, xBitstoWaitFor, pdTRUE, pdFALSE, 0); 
-            if(xEventGroupValue & xBitstoWaitFor)
+            if((xEventGroupValue & xBitstoWaitFor) == NOTIFY_WEBSERVER_TAG_INFO_TASK_CLOSE ||
+               (xEventGroupValue & xBitstoWaitFor) == NOTIFY_ACQUISITION_WINDOW_DONE)
             {
                 ESP_LOGI(TAG, "Stopping scan due to signal being raised!");                
                 //Let task finish up cleanly...signal back to the page that these results are hosted!
-                if((ret = esp_bluedroid_disable()) != ESP_OK)
-                {
-                    ESP_LOGW(TAG, "Could not disable bluedroid");
-                }
-                if((ret = esp_bluedroid_deinit()) != ESP_OK)
-                {
-                    ESP_LOGW(TAG, "Could not de-initialise and deallocate bluedroid");
-                }
                 if((ret = esp_bt_controller_disable()) != ESP_OK)
                 {
-                    ESP_LOGW(TAG, "Could not disable bluetooth controller");
+                    ESP_LOGE(TAG, "Could not disable bluetooth controller");
                 }
-                if((ret = esp_bluedroid_deinit()) != ESP_OK)
+                ESP_LOGI(TAG, "Disabled bluetooth controller");
+                if((ret = esp_bt_controller_deinit()) != ESP_OK)
                 {
-                    ESP_LOGW(TAG, "Could not deinit bluetooth controller");
-                }           
+                    ESP_LOGE(TAG, "Could not deinit bluetooth controller");
+                }
+                ESP_LOGI(TAG, "Deinited bluetooth controller");
                 xEventGroupSetBits( task_sync_event_group,  NOTIFY_BT_CALLBACK_DONE);
             }
             else
@@ -329,6 +372,7 @@ static void esp_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *par
                 ESP_LOGI(TAG, "Restarting scan!");
                 esp_ble_gap_set_scan_params(&ble_scan_params);
             }
+            
             
         }
         default:
@@ -1346,16 +1390,21 @@ void acquisitionTask(void *pvParameters)
     
     float image_buffer[768] = {0.0};
 
-    /*Switch on fan and block for 10 seconds as bluetooth task is getting tag ID's*/
-    unset_dormant_mode(&(device_peripherals.IAQ_ZH03));
+    ESP_LOGI(TAG, "Enabling bluetooth controller and bluedroid");
+    ESP_ERROR_CHECK(esp_bt_controller_enable(ESP_BT_MODE_BLE));
+    ESP_ERROR_CHECK(esp_bluedroid_init());
+    ESP_ERROR_CHECK(esp_bluedroid_enable());
+    ESP_ERROR_CHECK(esp_eddystone_app_register());
+    /*Both webserver setup and acquisition share the same GAP scan parameters*/
+    ESP_ERROR_CHECK(esp_ble_gap_set_scan_params(&ble_scan_params));
 
-    vTaskDelay(10000/portTICK_RATE_MS);
+    /*Switch on fan and block for ACQUISITION_FAN_SETUP_DURATION_MS milliseconds as bluetooth task is getting tag ID's*/
+    ESP_ERROR_CHECK(unset_dormant_mode(&(device_peripherals.IAQ_ZH03)));
+    vTaskDelay((ACQUISITION_FAN_SETUP_DURATION*1000)/portTICK_RATE_MS);
+
     ESP_LOGI(TAG, "Initializing SD card");
     ESP_LOGI(TAG, "Using SDMMC peripheral");
     sdmmc_host_t host = SDMMC_HOST_DEFAULT();
-
-    // This initializes the slot without card detect (CD) and write protect (WP) signals.
-    // Modify slot_config.gpio_cd and slot_config.gpio_wp if your board has these signals.
     sdmmc_slot_config_t slot_config = SDMMC_SLOT_CONFIG_DEFAULT();
     gpio_set_pull_mode(15, GPIO_FLOATING);
     gpio_set_pull_mode(2, GPIO_FLOATING);
@@ -1371,30 +1420,36 @@ void acquisitionTask(void *pvParameters)
     };
 
     sdmmc_card_t* card;
-    esp_err_t ret = esp_vfs_fat_sdmmc_mount("/sdcard", &host, &slot_config, &mount_config, &card);
-    ESP_ERROR_CHECK(ret);
-    // Card has been initialized, print its properties
+    ESP_ERROR_CHECK(esp_vfs_fat_sdmmc_mount(SD_CARD_MOUNT_POINT, &host, &slot_config, &mount_config, &card));
+    /*Card has been initialized, print its properties*/
     sdmmc_card_print_info(stdout, card);
-    const char* logile_name = "/sdcard/final.csv";
+    const char* logfile_name = "/sdcard/final.csv";
+
+    int exists= 0;
+    struct stat st;
+    esp_err_t ret = ESP_FAIL;
     while(1)
     {
         /*Open file by append mode, if file does not exist, create it*/
-        int exists= 0;
-        struct stat st;
-        if (stat(logile_name, &st) == 0)
+        if (stat(logfile_name, &st) == 0)
         {
             /*File exists, set integer to be checked*/
-            ESP_LOGE(TAG, "File does not exist, creating it...");
-            exists = 0; 
+            ESP_LOGI(TAG, "File exists, appending to file");
+            exists = 1; 
         }
         else
         {
             /*File exists, set integer to be checked*/
-            ESP_LOGE(TAG, "File exists, appending to file");
-            exists = 1;           
+            ESP_LOGW(TAG, "File does not exist, creating it...");
+            exists = 0;           
+        }
+
+        if (stat("/sdcard/directory", &st) == -1) 
+        {
+            mkdir("/sdcard/directory", 0700);
         }
         
-        FILE* logfile = fopen(logile_name, "a");
+        FILE* logfile = fopen(logfile_name, "a");
         if (logfile == NULL)
         {
             
@@ -1406,7 +1461,7 @@ void acquisitionTask(void *pvParameters)
         int i;
         if(exists)
         {
-                    //Get time
+            //Get time
             if (ds3231_get_time(&(device_peripherals.IAQ_DS3231), &date_time) != ESP_OK)
             {
                 ESP_LOGE(TAG, "Could not get time from DS3231, returned %s", esp_err_to_name(ret));
@@ -1416,30 +1471,35 @@ void acquisitionTask(void *pvParameters)
             {
                 i = fprintf(logfile, "\"%u\",", (unsigned int)mktime(&date_time));
             }
+            if (i < 0)
+            {
+                ESP_LOGE(TAG, "ERROR: impossible to write to log file");
+                esp_vfs_fat_sdmmc_unmount();
+                ESP_LOGI(TAG, "Card unmounted");
+                esp_restart();
+            }
         }
         else
         {
-            i = fprintf(logfile, "\"Time\",\"Tag_1_count\",\"mean_dBm\",\"variance_dBm\",\"Tag_2_count\",\"Mean_dBm\",\"Variance_dBm\",\"Mean_temp\",\"Max_temp\",\"Min_temp\",\"Temp_variance\",\"Temp_stddev\",\"Humidity\",\"Temperature\",\"PM 1\",\"PM 2.5\",\"PM 10\"\n");
+            i = fprintf(logfile, "\"Time\",\"Mean_temp\",\"Max_temp\",\"Min_temp\",\"Temp_variance\",\"Temp_stddev\",\"Humidity\",\"Temperature\",\"PM 1\",\"PM 2.5\",\"PM 10\",\"FCBDB62F1727_count\",\"FCBDB62F1727_mean_dBm\",\"F2416138F240_count\",\"F2416138F240_mean_dBm\"\n");
+            if (i < 0)
+            {
+                ESP_LOGE(TAG, "ERROR: impossible to write to log file");
+                esp_vfs_fat_sdmmc_unmount();
+                ESP_LOGI(TAG, "Card unmounted");
+                esp_restart();
+            }
+            if (ds3231_get_time(&(device_peripherals.IAQ_DS3231), &date_time) != ESP_OK)
+            {
+                ESP_LOGE(TAG, "Could not get time from DS3231, returned %s", esp_err_to_name(ret));
+                fprintf(logfile, "\"%d\",", -1);
+            }
+            else
+            {
+                fprintf(logfile, "\"%u\",", (unsigned int)mktime(&date_time));
+            }
+        
         }
-        if (i < 0)
-        {
-            ESP_LOGE(TAG, "ERROR: impossible to write to log file");
-            esp_vfs_fat_sdmmc_unmount();
-            ESP_LOGI(TAG, "Card unmounted");
-            esp_restart();
-        }
-        //Tag_1_count
-        fprintf(logfile, "\"%d\",", 2);
-        //mean_dBm
-        fprintf(logfile, "\"%d\",", 3);
-        //variance_dBm
-        fprintf(logfile, "\"%d\",", 4);
-        //Tag_2_count
-        fprintf(logfile, "\"%d\",", 5);
-        //mean_dBm
-        fprintf(logfile, "\"%d\",", 6);
-        //variance_dBm
-        fprintf(logfile, "\"%d\",", 7);
         //Get two images prior as the first image is usually garbled
         get_thermal_image(&device_peripherals, image_buffer);
         get_thermal_image(&device_peripherals, image_buffer);
@@ -1447,13 +1507,15 @@ void acquisitionTask(void *pvParameters)
         if(ret != ESP_OK)
         {
             ESP_LOGE(TAG, "Failed to get thermal image, returned %s", esp_err_to_name(ret));
+            //avg
+            fprintf(logfile, "\"%d\",", -1);
             //Max_temp
             fprintf(logfile, "\"%d\",", -1);
             //Min_temp
             fprintf(logfile, "\"%d\",", -1);
-            //Mean_temp
+            //var_var
             fprintf(logfile, "\"%d\",", -1);
-            //Temp_variance
+            //Temp_stddev
             fprintf(logfile, "\"%d\",", -1);
         }
 //\"Mean_temp\",\"Temp_max\",\"Temp_min\",\"Temp_variance\",,\"Temp_stddev\"
@@ -1538,17 +1600,31 @@ void acquisitionTask(void *pvParameters)
         //PM 2.5
         fprintf(logfile, "\"%d\",", (int)PM_2_5);
         //PM 10
-        fprintf(logfile, "\"%d\"\n", (int)PM_10);
+        fprintf(logfile, "\"%d\",", (int)PM_10);
         /* end of log file line */
+        xEventGroupSetBits( task_sync_event_group,  NOTIFY_ACQUISITION_WINDOW_DONE);
+        while((xEventGroupWaitBits(task_sync_event_group, NOTIFY_BT_CALLBACK_DONE, pdTRUE, pdFALSE, 100/portTICK_RATE_MS) & NOTIFY_BT_CALLBACK_DONE) != NOTIFY_BT_CALLBACK_DONE)
+        {
+            ESP_LOGI(TAG, "BT task done not set");
+        }
+
+        //Tag_1_count
+        fprintf(logfile, "\"%d\",", FCBDB62F1727_count);
+        //mean_dBm
+        fprintf(logfile, "\"%.1f\",", FCBDB62F1727_running_RSSI_mean);
+        //Tag_2_count
+        fprintf(logfile, "\"%d\",", F2416138F240_count);
+        //mean_dBm
+        fprintf(logfile, "\"%.1f\"\n", F2416138F240_running_RSSI_mean);
+
         fflush(logfile);
         fclose(logfile);
         esp_vfs_fat_sdmmc_unmount();
         ESP_LOGI(TAG, "Unmounted SD card");
         set_dormant_mode(&(device_peripherals.IAQ_ZH03));
         esp_bt_controller_deinit();
-        const int deep_sleep_sec = 10;
-        ESP_LOGI(TAG, "Entering deep sleep for %d seconds", deep_sleep_sec);
-        esp_deep_sleep(1000000LL * deep_sleep_sec); 
+        ESP_LOGI(TAG, "Entering deep sleep for %d seconds", DEEP_SLEEP_SEC);
+        esp_deep_sleep(1000000LL * DEEP_SLEEP_SEC); 
     }
 }
 
@@ -1595,6 +1671,8 @@ void app_main()
     esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
     esp_bt_controller_init(&bt_cfg);
 
+    task_sync_event_group = xEventGroupCreate();
+
     int32_t cd_level;
     TCA9534_get_level(&(device_peripherals.IAQ_TCA9534), TCA9534_SD_CD, &cd_level);
 
@@ -1605,7 +1683,7 @@ void app_main()
     ret = nvs_get_i32(my_handle, "mode", &startup_mode);
     ESP_ERROR_CHECK(ret);
     if(startup_mode == acquisition_mode)
-    {
+    {  
         ESP_LOGI(TAG, "Startup mode found set to 'acquisition mode' in NVS");
         if(cd_level == TCA9534_HIGH)
         {
@@ -1620,6 +1698,7 @@ void app_main()
         else
         {
             ESP_LOGI(TAG, "SD card connected");
+            xEventGroupSetBits(task_sync_event_group, CURRENT_MODE_ACQUISITION);
             for(int i=0;i<2;i++)
             {
                 TCA9534_set_level(&(device_peripherals.IAQ_TCA9534), TCA9534_WARN_LED, TCA9534_HIGH);
@@ -1633,8 +1712,8 @@ void app_main()
     else
     {
         ESP_LOGI(TAG, "Startup mode found set to 'webserver setup mode' in NVS");
+        xEventGroupClearBits(task_sync_event_group, CURRENT_MODE_ACQUISITION);
         /*Event group for task synchronisation*/
-        task_sync_event_group = xEventGroupCreate();
         /*This should Same priority as the bluetooth task, but we will set the antenna access prioritisation in ESP-IDF, of the two*/
         xTaskCreate(webServerTask, "webServerTask", 4096, NULL, 10, &xWebServerTaskHandle);
     }
