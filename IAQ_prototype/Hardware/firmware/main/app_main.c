@@ -92,7 +92,7 @@
 
 
 #define WEB_PORT 80U
-#define MAX_CONNECTIONS 12U /*Maximum tabs open*/
+#define MAX_CONNECTIONS 12U /*Maximum tabs open...spread over all clients*/
 
 #define GPIO_TCA9534_INT     35
 
@@ -199,7 +199,10 @@ static esp_ble_scan_params_t ble_scan_params =
     .scan_type = BLE_SCAN_TYPE_PASSIVE,
     .own_addr_type = BLE_ADDR_TYPE_PUBLIC,
     .scan_filter_policy = BLE_SCAN_FILTER_ALLOW_ALL,
+    /*Wifi takes over antenna time for (scan_window-scan_interval) in webserver mode, if hardware arbitration is preffered over software in menuconfig*/
+    /*scan interval*0.625ms = scan interval time*/
     .scan_interval = 0x50,
+    /*scan_window*0.625ms = scan window time*/
     .scan_window = 0x30,
     .scan_duplicate = BLE_SCAN_DUPLICATE_DISABLE
 };
@@ -212,79 +215,82 @@ static void esp_eddystone_show_inform(const esp_eddystone_result_t *res, const e
     char* tag_info_string = NULL;
     switch (res->common.frame_type)
     {
-    case EDDYSTONE_FRAME_TYPE_TLM:
-    {
-        ESP_LOGI(TAG, " Webserver setup mode bluetooth handler entry");
-        if ((xEventGroupGetBits(task_sync_event_group) & CURRENT_MODE_ACQUISITION) != CURRENT_MODE_ACQUISITION)
+        case EDDYSTONE_FRAME_TYPE_TLM:
         {
-            sprintf(mac_buffer, "%02X%02X%02X%02X%02X%02X", scan_result->scan_rst.bda[0],
-                                                            scan_result->scan_rst.bda[1],
-                                                            scan_result->scan_rst.bda[2],
-                                                            scan_result->scan_rst.bda[3],
-                                                            scan_result->scan_rst.bda[4],
-                                                            scan_result->scan_rst.bda[5]);
-            JSON_Value *root_value = json_value_init_object();
-            JSON_Object *root_object = json_value_get_object(root_value);
-            json_object_set_number(root_object, "RSSI", scan_result->scan_rst.rssi);
-            json_object_set_number(root_object, "BATT_VOLTAGE", res->inform.tlm.battery_voltage);
-            json_object_set_number(root_object, "TIME", res->inform.tlm.time);
-            json_object_set_string(root_object, "MAC", mac_buffer);
-            tag_info_string = json_serialize_to_string(root_value);
-            ESP_LOGI(TAG, "%s", tag_info_string);
-            json_value_free(root_value);
-            ESP_LOGI(TAG, "Tag info string length is %d bytes", strlen(tag_info_string));
-            if (tag_info_string != NULL)
+            ESP_LOGI(TAG, " Webserver setup mode bluetooth handler entry");
+            if ((xEventGroupGetBits(task_sync_event_group) & CURRENT_MODE_ACQUISITION) != CURRENT_MODE_ACQUISITION)
             {
-                connections = cgiWebsockBroadcast(&httpdFreertosInstance.httpdInstance, tag_cgi_resource_string, tag_info_string, strlen(tag_info_string), WEBSOCK_FLAG_NONE);
-                json_free_serialized_string(tag_info_string);
-                ESP_LOGD(TAG, "Broadcast sent to %d connections", connections);
+                sprintf(mac_buffer, "%02X%02X%02X%02X%02X%02X", scan_result->scan_rst.bda[0],
+                                                                scan_result->scan_rst.bda[1],
+                                                                scan_result->scan_rst.bda[2],
+                                                                scan_result->scan_rst.bda[3],
+                                                                scan_result->scan_rst.bda[4],
+                                                                scan_result->scan_rst.bda[5]);
+                JSON_Value *root_value = json_value_init_object();
+                JSON_Object *root_object = json_value_get_object(root_value);
+                json_object_set_number(root_object, "RSSI", scan_result->scan_rst.rssi);
+                json_object_set_number(root_object, "BATT_VOLTAGE", res->inform.tlm.battery_voltage);
+                json_object_set_number(root_object, "TIME", res->inform.tlm.time);
+                json_object_set_string(root_object, "MAC", mac_buffer);
+                tag_info_string = json_serialize_to_string(root_value);
+                ESP_LOGI(TAG, "%s", tag_info_string);
+                json_value_free(root_value);
+                ESP_LOGI(TAG, "Tag info string length is %d bytes", strlen(tag_info_string));
+                if (tag_info_string != NULL)
+                {
+                    connections = cgiWebsockBroadcast(&httpdFreertosInstance.httpdInstance, tag_cgi_resource_string, tag_info_string, strlen(tag_info_string), WEBSOCK_FLAG_NONE);
+                    json_free_serialized_string(tag_info_string);
+                    ESP_LOGD(TAG, "Broadcast sent to %d connections", connections);
+                }
+                else
+                {
+                    ESP_LOGD(TAG, " Tag info page JSON assembler returned NULL");
+                }
+                break;
             }
-            else
+            else if((xEventGroupGetBits(task_sync_event_group) & CURRENT_MODE_ACQUISITION) == CURRENT_MODE_ACQUISITION)
             {
-                ESP_LOGD(TAG, " Tag info page JSON assembler returned NULL");
+                ESP_LOGI(TAG, " Acquisition mode bluetooth handler entry");
+                sprintf(mac_buffer, "%02X%02X%02X%02X%02X%02X", scan_result->scan_rst.bda[0],
+                                                                scan_result->scan_rst.bda[1],
+                                                                scan_result->scan_rst.bda[2],
+                                                                scan_result->scan_rst.bda[3],
+                                                                scan_result->scan_rst.bda[4],
+                                                                scan_result->scan_rst.bda[5]);
+                if(strcmp(mac_buffer, "FCBDB62F1727") == 0)
+                {
+                    ESP_LOGI(TAG, " Gotten 0xFCBDB62F1727");
+                    FCBDB62F1727_count++;
+                    ESP_LOGI(TAG, "FCBDB62F1727 TLM observation received, total: %d", FCBDB62F1727_count);
+                    FCBDB62F1727_cumsum_RSSI += (scan_result->scan_rst.rssi);
+                    ESP_LOGI(TAG, "FCBDB62F1727 TLM observation RSSI is %d dBm", scan_result->scan_rst.rssi); 
+                    /*Check if count is zero to prevent a division by zero exception*/            
+                    FCBDB62F1727_count ==0?(FCBDB62F1727_running_RSSI_mean = 0):(FCBDB62F1727_running_RSSI_mean = (float)FCBDB62F1727_cumsum_RSSI/FCBDB62F1727_count);
+                    ESP_LOGI(TAG, "FCBDB62F1727 TLM running RSSI mean is %f dBm", FCBDB62F1727_running_RSSI_mean);  
+                }
+                else if(strcmp(mac_buffer, "F2416138F240") == 0)
+                {
+                    ESP_LOGI(TAG, " Gotten 0xF2416138F240");
+                    F2416138F240_count++;
+                    ESP_LOGI(TAG, "F2416138F240 TLM observation received, total: %d", F2416138F240_count);
+                    F2416138F240_cumsum_RSSI += (scan_result->scan_rst.rssi);
+                    ESP_LOGI(TAG, "F2416138F240 TLM observation RSSI is %d dBm", scan_result->scan_rst.rssi);
+                    /*Check if count is zero to prevent a division by zero exception*/       
+                    F2416138F240_count == 0? (F2416138F240_running_RSSI_mean = 0):(F2416138F240_running_RSSI_mean = (float)F2416138F240_cumsum_RSSI/F2416138F240_count);
+                    ESP_LOGI(TAG, "F2416138F240 TLM running RSSI mean is %f dBm", F2416138F240_running_RSSI_mean);  
+                }
+                else
+                {
+                    ESP_LOGI(TAG, " Gotten unregistered tag %s", mac_buffer);
+                }
+                break;
             }
+        }
+        default:
+        {
+            ESP_LOGW(TAG, "Other frame type received");
             break;
         }
-        else if((xEventGroupGetBits(task_sync_event_group) & CURRENT_MODE_ACQUISITION) == CURRENT_MODE_ACQUISITION)
-        {
-            ESP_LOGI(TAG, " Acquisition mode bluetooth handler entry");
-            sprintf(mac_buffer, "%02X%02X%02X%02X%02X%02X", scan_result->scan_rst.bda[0],
-                                                scan_result->scan_rst.bda[1],
-                                                scan_result->scan_rst.bda[2],
-                                                scan_result->scan_rst.bda[3],
-                                                scan_result->scan_rst.bda[4],
-                                                scan_result->scan_rst.bda[5]);
-
-            if(strcmp(mac_buffer, "FCBDB62F1727") == 0)
-            {
-                ESP_LOGI(TAG, " Gotten 0xFCBDB62F1727");
-                FCBDB62F1727_count++;
-                ESP_LOGI(TAG, "FCBDB62F1727 TLM observation received, total: %d", FCBDB62F1727_count);
-                FCBDB62F1727_cumsum_RSSI += (scan_result->scan_rst.rssi);
-                ESP_LOGI(TAG, "FCBDB62F1727 TLM observation RSSI is %d dBm", scan_result->scan_rst.rssi);        
-                FCBDB62F1727_count ==0?(FCBDB62F1727_running_RSSI_mean = 0):(FCBDB62F1727_running_RSSI_mean = (float)FCBDB62F1727_cumsum_RSSI/FCBDB62F1727_count);
-                ESP_LOGI(TAG, "FCBDB62F1727 TLM running RSSI mean is %f dBm", FCBDB62F1727_running_RSSI_mean);  
-            }
-            else if(strcmp(mac_buffer, "F2416138F240") == 0)
-            {
-                ESP_LOGI(TAG, " Gotten 0xF2416138F240");
-                F2416138F240_count++;
-                ESP_LOGI(TAG, "F2416138F240 TLM observation received, total: %d", F2416138F240_count);
-                F2416138F240_cumsum_RSSI += (scan_result->scan_rst.rssi);
-                ESP_LOGI(TAG, "F2416138F240 TLM observation RSSI is %d dBm", scan_result->scan_rst.rssi);        
-                F2416138F240_count == 0? (F2416138F240_running_RSSI_mean = 0):(F2416138F240_running_RSSI_mean = (float)F2416138F240_cumsum_RSSI/F2416138F240_count);
-                ESP_LOGI(TAG, "F2416138F240 TLM running RSSI mean is %f dBm", F2416138F240_running_RSSI_mean);  
-            }
-            }
-            else
-            {
-                ESP_LOGI(TAG, " Gotten unregistered tag %s", mac_buffer);
-            }
-            break;
-    }
-    default:
-        ESP_LOGW(TAG, "Other frame type received");
-        break;
     }
 }
 
@@ -298,103 +304,100 @@ static void esp_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *par
 
     switch (event)
     {
-    case ESP_GAP_BLE_SCAN_PARAM_SET_COMPLETE_EVT:
-    {
-        ret = esp_ble_gap_start_scanning(BLE_SCAN_DURATION);
-        if(ret != ESP_OK)
+        case ESP_GAP_BLE_SCAN_PARAM_SET_COMPLETE_EVT:
         {
-            ESP_LOGE(TAG, "Scanning returned error!");
-        }
-        break;
-    }
-    case ESP_GAP_BLE_SCAN_START_COMPLETE_EVT:
-    {
-        if ((ret = param->scan_start_cmpl.status) != ESP_BT_STATUS_SUCCESS)
-        {
-            ESP_LOGE(TAG, "Scan start failed: %s", esp_err_to_name(ret));
-        }
-        else
-        {
-            ESP_LOGI(TAG, "Start scanning...");
-        }
-        break;
-    }
-    case ESP_GAP_BLE_SCAN_RESULT_EVT:
-    {
-        esp_ble_gap_cb_param_t *scan_result = (esp_ble_gap_cb_param_t *)param;
-        switch (scan_result->scan_rst.search_evt)
-        {
-        case ESP_GAP_SEARCH_INQ_RES_EVT:
-        {
-            esp_eddystone_result_t eddystone_res;
-            memset(&eddystone_res, 0, sizeof(eddystone_res));
-            ret = esp_eddystone_decode(scan_result->scan_rst.ble_adv, scan_result->scan_rst.adv_data_len, &eddystone_res);
-            if (ret)
+            ret = esp_ble_gap_start_scanning(BLE_SCAN_DURATION);
+            if(ret != ESP_OK)
             {
-                //ESP_LOGI(TAG, "The received data is not an eddystone frame packet or a correct eddystone frame packet.");
-                // error:The received data is not an eddystone frame packet or a correct eddystone frame packet.
-                // just return
-                return;
+                ESP_LOGE(TAG, "Scanning returned error!");
             }
-            else
-            {
-                // The received adv data is a correct eddystone frame packet.
-                // Here, we get the eddystone infomation in eddystone_res, we can use the data in res to do other things.
-                // For example, just print them:
-                esp_eddystone_show_inform(&eddystone_res, scan_result);
-            }
-                /*Dont toggle bit representing notification that the tag info task is meant to close, just close cleanly and set own bit, preventing callback re-entry*/ 
             break;
         }
-        case ESP_GAP_SEARCH_INQ_CMPL_EVT:
+        case ESP_GAP_BLE_SCAN_START_COMPLETE_EVT:
         {
-            ESP_LOGI(TAG, "Scan is complete!");
-            xEventGroupValue = xEventGroupWaitBits(task_sync_event_group, xBitstoWaitFor, pdTRUE, pdFALSE, 0); 
-            if((xEventGroupValue & xBitstoWaitFor) == NOTIFY_WEBSERVER_TAG_INFO_TASK_CLOSE ||
-               (xEventGroupValue & xBitstoWaitFor) == NOTIFY_ACQUISITION_WINDOW_DONE)
+            if ((ret = param->scan_start_cmpl.status) != ESP_BT_STATUS_SUCCESS)
             {
-                ESP_LOGI(TAG, "Stopping scan due to signal being raised!");                
-                //Let task finish up cleanly...signal back to the page that these results are hosted!
-                if((ret = esp_bt_controller_disable()) != ESP_OK)
-                {
-                    ESP_LOGE(TAG, "Could not disable bluetooth controller");
-                }
-                ESP_LOGI(TAG, "Disabled bluetooth controller");
-                if((ret = esp_bt_controller_deinit()) != ESP_OK)
-                {
-                    ESP_LOGE(TAG, "Could not deinit bluetooth controller");
-                }
-                ESP_LOGI(TAG, "Deinited bluetooth controller");
-                xEventGroupSetBits( task_sync_event_group,  NOTIFY_BT_CALLBACK_DONE);
+                ESP_LOGE(TAG, "Scan start failed: returned code %s", esp_err_to_name(ret));
             }
             else
             {
-                ESP_LOGI(TAG, "Restarting scan!");
-                esp_ble_gap_set_scan_params(&ble_scan_params);
+                ESP_LOGI(TAG, "Start scanning...");
             }
-            
-            
+            break;
+        }
+        case ESP_GAP_BLE_SCAN_RESULT_EVT:
+        {
+            esp_ble_gap_cb_param_t *scan_result = (esp_ble_gap_cb_param_t *)param;
+            switch (scan_result->scan_rst.search_evt)
+            {
+                case ESP_GAP_SEARCH_INQ_RES_EVT:
+                {
+                    esp_eddystone_result_t eddystone_res;
+                    memset(&eddystone_res, 0, sizeof(eddystone_res));
+                    ret = esp_eddystone_decode(scan_result->scan_rst.ble_adv, scan_result->scan_rst.adv_data_len, &eddystone_res);
+                    if (ret)
+                    {
+                        //ESP_LOGI(TAG, "The received data is not an eddystone frame packet or a correct eddystone frame packet.");
+                        // error:The received data is not an eddystone frame packet or a correct eddystone frame packet.
+                        // just return
+                        return;
+                    }
+                    else
+                    {
+                        esp_eddystone_show_inform(&eddystone_res, scan_result);
+                    }
+                    break;
+                }
+                case ESP_GAP_SEARCH_INQ_CMPL_EVT:
+                {
+                    ESP_LOGI(TAG, "Scan is complete!");
+                    xEventGroupValue = xEventGroupWaitBits(task_sync_event_group, xBitstoWaitFor, pdTRUE, pdFALSE, 0); 
+                    if((xEventGroupValue & xBitstoWaitFor) == NOTIFY_WEBSERVER_TAG_INFO_TASK_CLOSE ||
+                    (xEventGroupValue & xBitstoWaitFor) == NOTIFY_ACQUISITION_WINDOW_DONE)
+                    {
+                        ESP_LOGI(TAG, "Stopping scan due to signal being raised!");                
+                        //Let task finish up cleanly...signal back to the page that these results are hosted!
+                        if((ret = esp_bt_controller_disable()) != ESP_OK)
+                        {
+                            ESP_LOGE(TAG, "Could not disable bluetooth controller");
+                        }
+                        ESP_LOGI(TAG, "Disabled bluetooth controller");
+                        if((ret = esp_bt_controller_deinit()) != ESP_OK)
+                        {
+                            ESP_LOGE(TAG, "Could not deinit bluetooth controller");
+                        }
+                        ESP_LOGI(TAG, "Deinited bluetooth controller");
+                        xEventGroupSetBits( task_sync_event_group,  NOTIFY_BT_CALLBACK_DONE);
+                    }
+                    else
+                    {
+                        ESP_LOGI(TAG, "Restarting scan!");
+                        esp_ble_gap_set_scan_params(&ble_scan_params);
+                    }
+                }
+                default:
+                {
+                    break;
+                }
+            }
+        }
+        case ESP_GAP_BLE_SCAN_STOP_COMPLETE_EVT:
+        {
+            if ((ret = param->scan_stop_cmpl.status) != ESP_BT_STATUS_SUCCESS)
+            {
+                ESP_LOGE(TAG, "Scan stop failed: Returned code %s", esp_err_to_name(ret));
+            }
+            else
+            {
+                ESP_LOGI(TAG, "Scan stopped");
+            }
+            break;
         }
         default:
+        {
+            ESP_LOGE(TAG, "Other callback event received");
             break;
         }
-        break;
-    }
-    case ESP_GAP_BLE_SCAN_STOP_COMPLETE_EVT:
-    {
-        if ((ret = param->scan_stop_cmpl.status) != ESP_BT_STATUS_SUCCESS)
-        {
-            ESP_LOGE(TAG, "Scan stop failed: %s", esp_err_to_name(ret));
-        }
-        else
-        {
-            ESP_LOGI(TAG, "Scan stopped");
-        }
-        break;
-    }
-    default:
-        ESP_LOGE(TAG, "Other callback event received");
-        break;
     }
 }
 
@@ -403,7 +406,6 @@ esp_err_t esp_eddystone_app_register(void)
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
     esp_err_t status;
 
-    ESP_LOGI(TAG, "Register eddystone tag callback");
     /*<! register the scan callback function to the gap module */
     if ((status = esp_ble_gap_register_callback(esp_gap_cb)) != ESP_OK)
     {
@@ -478,7 +480,6 @@ static void myWebsocketRecv(Websock *ws, char *data, int len, int flags)
                     ESP_LOGD(TAG, "Searching for %s...", value_search_string);
                     uint8_t shutdown_value = (uint32_t)json_object_dotget_number(root_object, value_search_string);
                     ESP_LOGD(TAG, "Found %s as %u", value_search_string, (unsigned int)shutdown_value);
-                    //command.value.unsigned_value = (uint32_t)json_object_dotget_number(root_object, value_search_string);
                     asprintf(&uid_search_string, "%s.UID", user_commands[i]);
                     ESP_LOGD(TAG, "Searching for %s...", uid_search_string);
                     ESP_LOGD(TAG, "Found %s as %s", value_search_string, json_object_dotget_string(root_object, uid_search_string));
@@ -739,7 +740,7 @@ esp_err_t get_thermal_image(peripherals_struct *device_peripherals, float* image
 }
 
 
-char *simulateStatusValues(char *status_string, peripherals_struct *device_peripherals)
+char *pollSensorStatus(char *status_string, peripherals_struct *device_peripherals)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
 
@@ -840,7 +841,7 @@ void statusPageWsBroadcastTask(void *pvParameters)
     while (1)
     {
 
-        status_string = simulateStatusValues(status_string, &device_peripherals);
+        status_string = pollSensorStatus(status_string, &device_peripherals);
         /*Take care of race conditions here when waiting on more than one bit*/
         xEventGroupValue = xEventGroupWaitBits(task_sync_event_group, xBitsNotifyCaller, pdTRUE, pdFALSE, 0); 
 
@@ -942,7 +943,8 @@ void wsStringBurstBroadcast(const char* base64_string, const char* data_continue
         free(data_txt_chunk);
         json_value_free(root_value);
         json_free_serialized_string(json_string);
-        size_to_do -= chunk_size; //Subtract the quantity of data already transferred.
+        /*Subtract the quantity of data already transferred.*/
+        size_to_do -= chunk_size; 
         if (size_to_do < 1024)
         {
             if ((offset + chunk_size) != size)
@@ -970,9 +972,8 @@ void infaredPageWsBroadcastTask(void *pvParameters)
         if(ret != ESP_OK)
         {
             ESP_LOGE(TAG, "Failed to get thermal image, returned error code %d", ret);
-            //Display Zeroed out image buffer to signify that there is an error.
+            /*Display Zeroed out image buffer to signify that there is an error.*/
             memset(image_buffer, 0, 768);
-            //Do something else
         }
         base64_camera_string = b64_encode_thermal_img(base64_camera_string, image_buffer);
         /*Take care of race conditions on bit setting by the caller task*/
@@ -982,7 +983,7 @@ void infaredPageWsBroadcastTask(void *pvParameters)
         { 
             if((xEventGroupValue & xBitsNotifyCaller) == xBitsNotifyCaller)
             {
-                //Let task finish up cleanly
+                /*Let task finish up cleanly*/
                 free(base64_camera_string);
                 xInfaredBroadcastHandle = NULL;
                 xEventGroupSetBits(task_sync_event_group, NOTIFY_WEBSERVER_THERMAL_VIEWER_TASK_DONE);
@@ -990,13 +991,13 @@ void infaredPageWsBroadcastTask(void *pvParameters)
             }
             else if ((xEventGroupValue & xBitsNotifyCaller) == xBitsDontNotifyCaller)
             {
-                //Let task finish up cleanly
+                /*Let task finish up cleanly*/
                  xInfaredBroadcastHandle = NULL;
                 vTaskDelete(NULL);                
             }
             else
             {
-                //ESP_LOG_BUFFER_HEXDUMP("Base64 data:", base64_string, strlen(base64_string)+1, ESP_LOG_DEBUG);
+                /*ESP_LOG_BUFFER_HEXDUMP("Base64 data:", base64_string, strlen(base64_string)+1, ESP_LOG_DEBUG);*/
                 wsStringBurstBroadcast(base64_camera_string, "CAMERA_CONT", "CAMERA_END");
                 free(base64_camera_string);
             }
@@ -1005,14 +1006,14 @@ void infaredPageWsBroadcastTask(void *pvParameters)
         {
             if((xEventGroupValue & xBitsNotifyCaller) == xBitsNotifyCaller)
             {
-                //Let task finish up cleanly
+                /*Let task finish up cleanly*/
                 xInfaredBroadcastHandle = NULL;
                 xEventGroupSetBits(task_sync_event_group, NOTIFY_WEBSERVER_THERMAL_VIEWER_TASK_DONE);
                 vTaskDelete(NULL);
             }
             else if ((xEventGroupValue & xBitsNotifyCaller) == xBitsDontNotifyCaller)
             {
-                //Let task finish up cleanly
+                /*Let task finish up cleanly*/
                 xInfaredBroadcastHandle = NULL;
                 vTaskDelete(NULL);                
             }
@@ -1022,7 +1023,8 @@ void infaredPageWsBroadcastTask(void *pvParameters)
             }
             
         }
-        /*Refresh rate - 20% as per datasheet*/
+        /*1000ms if the delay tested that would be longer than (data transfer+browser render) time both on mobile and desktop.
+          This means that the next image will be sent 1 second later after all browser image operations have completed */
         vTaskDelay(1000 / portTICK_RATE_MS);
     }
     vTaskDelete(NULL);
@@ -1057,7 +1059,7 @@ void tagPageWsBroadcastTask(void *pvParameters)
             ESP_LOGE(TAG, "Eddystone callback handler registration unsuccessful");
         }
         ESP_LOGI(TAG, "Eddystone callback handler succesfully registered");
-        /*<! set scan parameters*/
+        /*set parameters for the next scan*/
         esp_ble_gap_set_scan_params(&ble_scan_params);
     }
     else if(esp_bt_controller_get_status() == ESP_BT_CONTROLLER_STATUS_ENABLED && esp_bluedroid_get_status() == ESP_BLUEDROID_STATUS_ENABLED)
@@ -1081,7 +1083,7 @@ void tagPageWsBroadcastTask(void *pvParameters)
                 xEventGroupValue = xEventGroupWaitBits(task_sync_event_group, NOTIFY_BT_CALLBACK_DONE, pdTRUE, pdFALSE, 12000/portTICK_RATE_MS);
                 if(xEventGroupValue & NOTIFY_BT_CALLBACK_DONE)
                 {
-                    //Let task finish up cleanly
+                    /*Let task finish up cleanly*/
                     xTagBroadcastHandle = NULL;
                     xEventGroupSetBits(task_sync_event_group, NOTIFY_WEBSERVER_TAG_INFO_TASK_DONE);
                     vTaskDelete(NULL);
@@ -1092,7 +1094,7 @@ void tagPageWsBroadcastTask(void *pvParameters)
                 xEventGroupValue = xEventGroupWaitBits(task_sync_event_group, NOTIFY_BT_CALLBACK_DONE, pdTRUE, pdFALSE, 12000/portTICK_RATE_MS);
                 if(xEventGroupValue & NOTIFY_BT_CALLBACK_DONE)
                 {
-                    //Let task finish up cleanly
+                    /*Let task finish up cleanly*/
                     xTagBroadcastHandle = NULL;
                     vTaskDelete(NULL);
                 }               
@@ -1443,24 +1445,20 @@ void acquisitionTask(void *pvParameters)
             ESP_LOGW(TAG, "File does not exist, creating it...");
             exists = 0;           
         }
-
-        if (stat("/sdcard/directory", &st) == -1) 
-        {
-            mkdir("/sdcard/directory", 0700);
-        }
         
-        FILE* logfile = fopen(logfile_name, "a");
-        if (logfile == NULL)
-        {
-            
-            ESP_LOGE(TAG, "Failed to open file for writing");
-            esp_vfs_fat_sdmmc_unmount();
-            ESP_LOGI(TAG, "Card unmounted");
-            esp_restart();
-        }
         int i;
+        FILE* logfile = NULL;
         if(exists)
         {
+            logfile = fopen(logfile_name, "a");
+            if (logfile == NULL)
+            {
+                
+                ESP_LOGE(TAG, "Failed to open file for writing");
+                esp_vfs_fat_sdmmc_unmount();
+                ESP_LOGI(TAG, "Card unmounted");
+                esp_restart();
+            }
             //Get time
             if (ds3231_get_time(&(device_peripherals.IAQ_DS3231), &date_time) != ESP_OK)
             {
@@ -1481,6 +1479,15 @@ void acquisitionTask(void *pvParameters)
         }
         else
         {
+            logfile = fopen(logfile_name, "w");
+            if (logfile == NULL)
+            {
+                
+                ESP_LOGE(TAG, "Failed to open file for writing");
+                esp_vfs_fat_sdmmc_unmount();
+                ESP_LOGI(TAG, "Card unmounted");
+                esp_restart();
+            }
             i = fprintf(logfile, "\"Time\",\"Mean_temp\",\"Max_temp\",\"Min_temp\",\"Temp_variance\",\"Temp_stddev\",\"Humidity\",\"Temperature\",\"PM 1\",\"PM 2.5\",\"PM 10\",\"FCBDB62F1727_count\",\"FCBDB62F1727_mean_dBm\",\"F2416138F240_count\",\"F2416138F240_mean_dBm\"\n");
             if (i < 0)
             {
@@ -1520,7 +1527,8 @@ void acquisitionTask(void *pvParameters)
         }
 //\"Mean_temp\",\"Temp_max\",\"Temp_min\",\"Temp_variance\",,\"Temp_stddev\"
         float avg;
-        if(meanValue(image_buffer, 768, &avg) == ESP_OK)
+        size_t validElements;
+        if(meanValue(image_buffer, 768, &avg, false, &validElements) == ESP_OK)
         {
             fprintf(logfile, "\"%.2f\",", avg);
             ESP_LOGI(TAG, "Image mean value is %.2f degree celsius", avg);
@@ -1531,7 +1539,8 @@ void acquisitionTask(void *pvParameters)
             ESP_LOGI(TAG, "Could not obtain image mean");            
         }
         float max;
-        if(floatMaxValue(image_buffer, 768, &max) == ESP_OK)
+        /*Dont exit on Nan and inf values, ignore*/
+        if(floatMaxValue(image_buffer, 768, &max, false, &validElements) == ESP_OK)
         {
             fprintf(logfile, "\"%.2f\",", max);
             ESP_LOGI(TAG, "Image max value is %.2f degree celsius", max);
@@ -1542,7 +1551,8 @@ void acquisitionTask(void *pvParameters)
             ESP_LOGI(TAG, "Could not obtain image max value");            
         }
         float min;
-        if(floatMinValue(image_buffer, 768, &min) == ESP_OK)
+        /*Dont exit on Nan and inf values, ignore*/
+        if(floatMinValue(image_buffer, 768, &min, false, &validElements) == ESP_OK)
         {
             fprintf(logfile, "\"%.2f\",", min);
             ESP_LOGI(TAG, "Image min value is %.2f degree celsius", min);
@@ -1553,7 +1563,8 @@ void acquisitionTask(void *pvParameters)
             ESP_LOGI(TAG, "Could not obtain image min value");            
         }
         float var;
-        if(variance(image_buffer, 768, &var) == ESP_OK)
+        /*Dont exit on Nan and inf values, ignore*/
+        if(variance(image_buffer, 768, &var, false, &validElements) == ESP_OK)
         {
             fprintf(logfile, "\"%.2f\",", var);
             ESP_LOGI(TAG, "Image variance is +/-%.2f degree celsius", var);
@@ -1564,7 +1575,8 @@ void acquisitionTask(void *pvParameters)
             ESP_LOGI(TAG, "Could not obtain image variance");            
         }
         float std_deviation;
-        if(stddev(image_buffer, 768, &std_deviation) == ESP_OK)
+        /*/*Dont exit on Nan and inf values, ignore*/
+        if(stddev(image_buffer, 768, &std_deviation, false, &validElements) == ESP_OK)
         {
             fprintf(logfile, "\"%.2f\",", std_deviation);
             ESP_LOGI(TAG, "Image standard deviation is +/-%.2f degree celsius", std_deviation);
