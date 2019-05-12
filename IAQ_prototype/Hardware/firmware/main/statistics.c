@@ -6,7 +6,7 @@
 
 static char* TAG = "statistics";
 
-esp_err_t floatMaxValue(float myArray[], size_t size, float* maxValuePtr, int exitInfNan, size_t* computeSize)
+esp_err_t floatMaxValue(const float myArray[], const size_t size, float* maxValuePtr, const int exitInfNan, size_t* computeSize)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
     if(myArray == NULL || size <= 0 || maxValuePtr == NULL || computeSize == NULL)
@@ -44,7 +44,7 @@ esp_err_t floatMaxValue(float myArray[], size_t size, float* maxValuePtr, int ex
     return ESP_OK;
 }
 
-esp_err_t intMaxValue(int myArray[], size_t size, int* maxValuePtr)
+esp_err_t intMaxValue(const int myArray[], const size_t size, int* maxValuePtr)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
     if(myArray == NULL || size <= 0 || maxValuePtr == NULL)
@@ -67,7 +67,7 @@ esp_err_t intMaxValue(int myArray[], size_t size, int* maxValuePtr)
     return ESP_OK;
 }
 
-esp_err_t floatMinValue(float myArray[], size_t size, float* minValuePtr, int exitInfNan, size_t* computeSize)
+esp_err_t floatMinValue(const float myArray[], const size_t size, float* minValuePtr, const int exitInfNan, size_t* computeSize)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
     if(myArray == NULL || size <= 0 || minValuePtr == NULL || computeSize == NULL)
@@ -106,7 +106,7 @@ esp_err_t floatMinValue(float myArray[], size_t size, float* minValuePtr, int ex
     return ESP_OK;
 }
 
-esp_err_t intMinValue(int myArray[], size_t size, int* minValuePtr)
+esp_err_t intMinValue(const int myArray[], const size_t size, int* minValuePtr)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
     if(myArray == NULL || size <= 0 || minValuePtr == NULL)
@@ -128,7 +128,7 @@ esp_err_t intMinValue(int myArray[], size_t size, int* minValuePtr)
     return ESP_OK;
 }
 
-esp_err_t floatSumValue(float myArray[], size_t size, float* sumValuePtr, int exitInfNan, size_t* computeSize)
+esp_err_t floatSumValue(const float myArray[], const size_t size, float* sumValuePtr, const int exitInfNan, size_t* computeSize)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
     if(myArray == NULL || size <= 0 || sumValuePtr == NULL || computeSize == NULL)
@@ -163,7 +163,7 @@ esp_err_t floatSumValue(float myArray[], size_t size, float* sumValuePtr, int ex
     return ESP_OK;
 }
 
-esp_err_t intSumValue(int myArray[], size_t size, int* sumValuePtr)
+esp_err_t intSumValue(const int myArray[], const size_t size, int* sumValuePtr)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
     if(myArray == NULL || size <= 0 || sumValuePtr == NULL)
@@ -182,7 +182,7 @@ esp_err_t intSumValue(int myArray[], size_t size, int* sumValuePtr)
     return ESP_OK;
 }
 
-esp_err_t meanValue(float myArray[], size_t size, float* meanValuePtr, int exitInfNan, size_t* computeSize)
+esp_err_t meanValue(const float myArray[], const size_t size, float* meanValuePtr, const int exitInfNan, size_t* computeSize)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
     if(myArray == NULL || size <= 0 || meanValuePtr == NULL || computeSize == NULL)
@@ -193,7 +193,7 @@ esp_err_t meanValue(float myArray[], size_t size, float* meanValuePtr, int exitI
     float sum = 0.0;
     size_t validElements = 0;
 
-    /*Calculate sum of values, taking note of the boolean controlling ignoring of inf and Nan elementsf*/
+    /*Calculate sum of values, taking note of the boolean controlling ignoring of inf and Nan elements*/
     if(floatSumValue(myArray, size, &sum, exitInfNan, &validElements) != ESP_OK)
     {
         *computeSize = validElements;
@@ -207,7 +207,7 @@ esp_err_t meanValue(float myArray[], size_t size, float* meanValuePtr, int exitI
     return ESP_OK;
 }
 
-esp_err_t variance(float myArray[], size_t size, float* varianceValuePtr, int exitInfNan, size_t* computeSize)
+esp_err_t variance(const float myArray[], const size_t size, float* varianceValuePtr, const int exitInfNan, size_t* computeSize)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
     if(myArray == NULL || size <= 0 || varianceValuePtr == NULL || computeSize == NULL)
@@ -240,7 +240,7 @@ esp_err_t variance(float myArray[], size_t size, float* varianceValuePtr, int ex
     return ESP_OK;
 }
 
-esp_err_t stddev(float myArray[], size_t size, float* stddevPtr, int exitInfNan, size_t* computeSize)
+esp_err_t stddev(const float myArray[], const size_t size, float* stddevPtr, const int exitInfNan, size_t* computeSize)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
     if(myArray == NULL || size <= 0 || stddevPtr == NULL || computeSize == NULL)
