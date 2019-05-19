@@ -73,12 +73,7 @@ typedef struct
         size_t len;
     }data;
 
-    struct
-    {
-        void*  pointer;
-        size_t len;
-    }padding;
-
+    void* padding;
     size_t dtype_size;
 } c2numpyData_t;
 
@@ -385,6 +380,15 @@ int c2numpy_open(c2numpy_writer *writer)
             writer->currentFileNumber += 1;                                     \
         }                                                                       \
     }                                                                                                                                              \
+}
+
+c2numpyData_t* c2numpy_set_array_properties(c2numpyData_t* array, void* data, size_t dataLength, size_t dtypeSize, void* paddingElement)
+{
+    array->data.pointer = data;
+    array->data.len = dataLength;
+    array->dtype_size = dtypeSize;
+    array->padding = paddingElement;
+    return array;
 }
 
 int c2numpy_write_array(c2numpy_writer *writer, c2numpyData_t* array)
