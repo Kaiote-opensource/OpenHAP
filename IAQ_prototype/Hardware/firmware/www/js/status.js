@@ -43,6 +43,9 @@ var graphs = {
         t: 60,
         pad: 20
       },
+      yaxis: {
+        range: [Math.min.apply(null, tempe_data.y) - 10, Math.max.apply(null, tempe_data.y) + 10]
+      },
       xaxis: {
         autorange: true,
         showgrid: false,
@@ -51,7 +54,8 @@ var graphs = {
         autotick: true,
         ticks: '',
         showticklabels: false,
-        fixedrange: true
+        fixedrange: true,
+
       },
       displayModeBar: false,
     }, { showSendToCloud: false });
@@ -65,7 +69,9 @@ var graphs = {
         t: 60,
         pad: 20
       },
-
+      yaxis: {
+        range: [Math.min.apply(null, humidity_data.y) - 10, Math.max.apply(null, humidity_data.y) + 10]
+      },
       xaxis: {
         autorange: true,
         showgrid: false,
@@ -87,6 +93,9 @@ var graphs = {
         b: 60,
         t: 60,
         pad: 20
+      },
+      yaxis: {
+        range: [Math.min.apply(null, pm25_data.y) - 10, Math.max.apply(null, pm25_data.y) + 10]
       },
       xaxis: {
         autorange: true,

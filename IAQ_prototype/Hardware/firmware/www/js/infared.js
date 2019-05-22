@@ -128,7 +128,7 @@ var socket = {
         infared_responses.imageFloating = Array.prototype.slice.call(new Float32Array(_base64ToArrayBuffer(infared_responses.bufferOut))).reverse();
         helpers.log(infared_responses.imageFloating)
 
-        document.getElementById("conversion-frame-rate").innerHTML = response.CONVERSION_FRAMERATE + ""
+        // document.getElementById("conversion-frame-rate").innerHTML = response.CONVERSION_FRAMERATE + ""
         document.getElementById("t-min").innerHTML = infared_responses.imageFloating.reduce(function (a, b) {
             return Number(Math.min(a, b)).toFixed(2);
         }) + ""
