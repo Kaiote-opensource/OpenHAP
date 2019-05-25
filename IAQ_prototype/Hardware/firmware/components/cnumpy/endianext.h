@@ -29,9 +29,14 @@ bool isLittleEndian();
 /* Like memcpy, but than with bytes reversed. As unsafe as memcpy too! */
 void * swapcpy(void *dest, const void *src, size_t n);
 
+/* ensures, by testing, the result is in little endian order.
+ * Note: not as fast as byte swapping from byteswap.h, but some
+ * systems do not have these available. And this works for all sizes. */
+void * littleEndianCpy(void *dest, const void *src, size_t n);
+
 /* ensures, by testing, the result is in big endian order.
  * Note: not as fast as byte swapping from byteswap.h, but some
  * systems do not have these available. And this works for all sizes. */
-void * tobecpy(void *dest, const void *src, size_t n);
+void * bigEndianCpy(void *dest, const void *src, size_t n);
 
 #endif /* ENDIANEXT_H_ */

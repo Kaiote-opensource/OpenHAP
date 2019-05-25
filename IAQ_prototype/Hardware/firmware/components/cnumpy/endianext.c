@@ -52,8 +52,15 @@ void * swapcpy(void *dest, const void *src, size_t n)
   return dest; }
 
 /* Use this to copy int's double's etc. Ensures, by testing, the result
+ * is in little Endian order.
+ * Note: not as fast as byte swapping from byteswap.h, but some
+ * systems do not have these available. And this works for all sizes. */
+void * littleEndianCpy(void *dest, const void *src, size_t n)
+{ return (isLittleEndian() == true) ? memcpy(dest,src,n) : swapcpy(dest,src,n); }
+
+/* Use this to copy int's double's etc. Ensures, by testing, the result
  * is in big Endian order.
  * Note: not as fast as byte swapping from byteswap.h, but some
  * systems do not have these available. And this works for all sizes. */
-void * tobecpy(void *dest, const void *src, size_t n)
-{ return (isLittleEndian() == true) ? swapcpy(dest,src,n) : memcpy(dest,src,n); }
+void * bigEndianCpy(void *dest, const void *src, size_t n)
+{ return (isBigEndian() == true) ? memcpy(dest,src,n) : swapcpy(dest,src,n); }
