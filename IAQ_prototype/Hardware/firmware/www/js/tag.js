@@ -7,13 +7,10 @@ const SOCKET_URL = "ws://192.168.4.1:80/tag.cgi";
 var websocketInst = new WebSocket(SOCKET_URL);
 
 var lib = new LocalStorageDB('documents');
-
 // Check if the database was just created. Useful for initial database setup
-
-
 var tag = {
     value: function () {
-        if(lib.get()['devices'].length > 1){
+        if (lib.get()['devices'].length > 1) {
             lib.remove('devices', 0)
         }
         return lib.get()['devices'];

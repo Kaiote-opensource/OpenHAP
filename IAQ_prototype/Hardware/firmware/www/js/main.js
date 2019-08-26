@@ -1,34 +1,3 @@
-
-/***
- * Main Function I.e Bootstrap JS replacement
- */
-// const triggers = Array.from(document.querySelectorAll('[data-toggle="collapse"]'));
-
-// window.addEventListener('click', (ev) => {
-//   const elm = ev.target;
-//   console.log(ev.target)
-//   if (triggers.includes(elm)) {
-//     const selector = elm.getAttribute('data-target');
-//     console.log(selector)
-//     collapse(selector, 'toggle');
-//   }
-// }, false);
-
-
-// const fnmap = {
-//   'toggle': 'toggle',
-//   'show': 'add',
-//   'hide': 'remove'
-// };
-
-// const collapse = (selector, cmd) => {
-//   const targets = Array.from(document.querySelectorAll(selector));
-//   targets.forEach(target => {
-//     target.classList[fnmap[cmd]]('show');
-//   });
-// }
-
-
 var urls = {
   "home": "index.html",
   "login": "index.html",

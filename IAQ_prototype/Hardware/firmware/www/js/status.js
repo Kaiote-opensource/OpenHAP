@@ -166,7 +166,7 @@ var socket_responses = {
         + responses.RTC_BATT +
         '%" aria-valuenow="' + responses.RTC_BATT +
         '" aria-valuemin="0" aria-valuemax="100">' +
-        responses.RTC_BATT + "%" +
+        (parseInt(responses.RTC_BATT) || 0) + "%" +
         '</div>' +
         '</div>';
 
@@ -174,11 +174,11 @@ var socket_responses = {
 
       document.getElementById("main-bat-val").innerHTML = '<div class="progress" style="width:100%;">' +
         '<div class="progress-bar bg-danger" role="progressbar" style="width: ' +
-        responses.RTC_BATT +
+        (parseInt(responses.RTC_BATT) || 0) +
         '%" aria-valuenow="' +
-        responses.RTC_BATT +
+        (parseInt(responses.RTC_BATT) || 0) +
         '" aria-valuemin="0" aria-valuemax="100">' +
-        responses.RTC_BATT + "%" +
+        (parseInt(responses.RTC_BATT) || 0) + "%" +
         '</div>' +
         '</div>';
 
@@ -186,11 +186,11 @@ var socket_responses = {
 
       document.getElementById("main-bat-val").innerHTML = '<div class="progress" style="width:100%;">' +
         '<div class="progress-bar bg-warning" role="progressbar" style="width: ' +
-        responses.RTC_BATT +
+        (parseInt(responses.RTC_BATT) || 0) +
         '%" aria-valuenow="' +
-        responses.RTC_BATT +
+        (parseInt(responses.RTC_BATT) || 0) +
         '" aria-valuemin="0" aria-valuemax="100">' +
-        responses.RTC_BATT + "%" +
+        (parseInt(responses.RTC_BATT) || 0) + "%" +
         '</div>' +
         '</div>';
     }

@@ -278,7 +278,7 @@ a:not([href]):not([tabindex]) {
 /*change the thinkness of the scrollbar here*/
 
 ::-webkit-scrollbar {
-    /* // width: 12px; */
+    width: 5px;
     height: 10px;
     -webkit-box-shadow: inset 0 0 3px #d1d2d3;
     -webkit-border-radius: 0px;
@@ -291,6 +291,7 @@ a:not([href]):not([tabindex]) {
     -webkit-box-shadow: inset 0 0 0px #d1d2d3;
     -webkit-border-radius: 0px;
     border-radius: 0px;
+    background: #000000;
 }
 
 /*this is the little scrolly dealio in the bar*/
@@ -299,6 +300,7 @@ a:not([href]):not([tabindex]) {
     border-radius: 1px;
     background: #3a4248;
     height: 3px;
+    width: 5px;
 }
 
 /*nobody needs this little scrollbar corner, I mean really, get rid of it haha*/
@@ -425,7 +427,7 @@ a:not([href]):not([tabindex]) {
     .statistic-k {
         border-bottom: solid 1px #e6e2e2;
     }
-    #infrared-image{
+    #infrared-image {
         height: 48vh;
         width: 100%;
     }
@@ -439,7 +441,7 @@ a:not([href]):not([tabindex]) {
         color: #000000;
         text-align: right;
     }
-    #infrared-image{
+    #infrared-image {
         height: 85vh;
         width: 100%;
     }
