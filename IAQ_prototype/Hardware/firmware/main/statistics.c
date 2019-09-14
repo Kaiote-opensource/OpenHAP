@@ -9,7 +9,7 @@ static char* TAG = "statistics";
 esp_err_t floatMaxValue(const float myArray[], const size_t size, float* maxValuePtr, const bool exitInfNan, size_t* computeSize)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
-    if(myArray == NULL || size <= 0 || maxValuePtr == NULL || computeSize == NULL)
+    if(myArray == NULL || size == 0 || maxValuePtr == NULL || computeSize == NULL)
     {
         return ESP_ERR_INVALID_ARG;
     }
@@ -47,7 +47,7 @@ esp_err_t floatMaxValue(const float myArray[], const size_t size, float* maxValu
 esp_err_t intMaxValue(const int myArray[], const size_t size, int* maxValuePtr)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
-    if(myArray == NULL || size <= 0 || maxValuePtr == NULL)
+    if(myArray == NULL || size == 0 || maxValuePtr == NULL)
     {
         return ESP_ERR_INVALID_ARG;
     }
@@ -70,7 +70,7 @@ esp_err_t intMaxValue(const int myArray[], const size_t size, int* maxValuePtr)
 esp_err_t floatMinValue(const float myArray[], const size_t size, float* minValuePtr, const bool exitInfNan, size_t* computeSize)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
-    if(myArray == NULL || size <= 0 || minValuePtr == NULL || computeSize == NULL)
+    if(myArray == NULL || size == 0 || minValuePtr == NULL || computeSize == NULL)
     {
         return ESP_ERR_INVALID_ARG;
     }
@@ -109,7 +109,7 @@ esp_err_t floatMinValue(const float myArray[], const size_t size, float* minValu
 esp_err_t intMinValue(const int myArray[], const size_t size, int* minValuePtr)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
-    if(myArray == NULL || size <= 0 || minValuePtr == NULL)
+    if(myArray == NULL || size == 0 || minValuePtr == NULL)
     {
         return ESP_ERR_INVALID_ARG;
     }
@@ -131,7 +131,7 @@ esp_err_t intMinValue(const int myArray[], const size_t size, int* minValuePtr)
 esp_err_t floatSumValue(const float myArray[], const size_t size, float* sumValuePtr, const bool exitInfNan, size_t* computeSize)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
-    if(myArray == NULL || size <= 0 || sumValuePtr == NULL || computeSize == NULL)
+    if(myArray == NULL || size == 0 || sumValuePtr == NULL || computeSize == NULL)
     {
         return ESP_ERR_INVALID_ARG;
     }
@@ -166,7 +166,7 @@ esp_err_t floatSumValue(const float myArray[], const size_t size, float* sumValu
 esp_err_t intSumValue(const int myArray[], const size_t size, int* sumValuePtr)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
-    if(myArray == NULL || size <= 0 || sumValuePtr == NULL)
+    if(myArray == NULL || size == 0 || sumValuePtr == NULL)
     {
         return ESP_ERR_INVALID_ARG;
     }
@@ -185,7 +185,7 @@ esp_err_t intSumValue(const int myArray[], const size_t size, int* sumValuePtr)
 esp_err_t meanValue(const float myArray[], const size_t size, float* meanValuePtr, const bool exitInfNan, size_t* computeSize)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
-    if(myArray == NULL || size <= 0 || meanValuePtr == NULL || computeSize == NULL)
+    if(myArray == NULL || size == 0 || meanValuePtr == NULL || computeSize == NULL)
     {
         return ESP_ERR_INVALID_ARG;
     }
@@ -210,7 +210,7 @@ esp_err_t meanValue(const float myArray[], const size_t size, float* meanValuePt
 esp_err_t variance(const float myArray[], const size_t size, float* varianceValuePtr, const bool exitInfNan, size_t* computeSize)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
-    if(myArray == NULL || size <= 0 || varianceValuePtr == NULL || computeSize == NULL)
+    if(myArray == NULL ||  size == 0 || varianceValuePtr == NULL || computeSize == NULL)
     {
         return ESP_ERR_INVALID_ARG;
     }
@@ -243,7 +243,7 @@ esp_err_t variance(const float myArray[], const size_t size, float* varianceValu
 esp_err_t stddev(const float myArray[], const size_t size, float* stddevPtr, const bool exitInfNan, size_t* computeSize)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
-    if(myArray == NULL || size <= 0 || stddevPtr == NULL || computeSize == NULL)
+    if(myArray == NULL ||  size == 0 || stddevPtr == NULL || computeSize == NULL)
     {
         return ESP_ERR_INVALID_ARG;
     }
