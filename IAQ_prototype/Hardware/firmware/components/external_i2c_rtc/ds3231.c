@@ -42,9 +42,11 @@
 #define DS3231_12HOUR_FLAG  0x40
 #define DS3231_12HOUR_MASK  0x1f
 #define DS3231_PM_FLAG      0x20
-#define DS3231_MONTH_MASK   0x1f
+#define DS3231_MONTH_MASK   0x1f  
 
 static char* TAG = "DS3231";
+
+static int DS3231_I2C_TIMEOUT = 1000;
 
 enum
 {
@@ -61,12 +63,14 @@ enum
 static uint8_t bcd2dec(uint8_t val)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
-    return (val >> 4) * 10 + (val & 0x0f);
+    
+    return ((val >> 4) * 10 + (val & 0x0f));
 }
 
 static uint8_t dec2bcd(uint8_t val)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
+
     return ((val / 10) << 4) + (val % 10);
 }
 
@@ -80,6 +84,7 @@ esp_err_t ds3231_init(DS3231* DS3231_inst, int address, i2c_port_t port, Semapho
         DS3231_inst->i2c_bus_mutex=*bus_mutex;
         return ESP_OK;
     }
+
     return ESP_ERR_INVALID_ARG;
 }
 
@@ -105,14 +110,14 @@ static esp_err_t ds3231_i2c_read(const DS3231* DS3231_inst, const void *out_data
     i2c_master_read(cmd, in_data, in_size, I2C_MASTER_LAST_NACK);
     i2c_master_stop(cmd);
 
-    esp_err_t ret = i2c_master_cmd_begin((DS3231_inst->i2c_port), cmd, 1000/portTICK_RATE_MS);
+    esp_err_t ret = i2c_master_cmd_begin((DS3231_inst->i2c_port), cmd, DS3231_I2C_TIMEOUT/portTICK_RATE_MS);
     i2c_cmd_link_delete(cmd);
 
     xSemaphoreGive(DS3231_inst->i2c_bus_mutex);
 
     if (ret != ESP_OK)
     {
-        ESP_LOGE(TAG, "Could not read from device [0x%02x at %d]: returned %d", (DS3231_inst->address), (DS3231_inst->i2c_port), ret);
+        ESP_LOGE(TAG, "Could not read from ds3231 device at address [0x%02x at %d]: returned %d", (DS3231_inst->address), (DS3231_inst->i2c_port), ret);
     }
 
     return ret;    
@@ -139,14 +144,14 @@ esp_err_t ds3231_i2c_write(const DS3231* DS3231_inst, const void *out_reg, size_
         i2c_master_write(cmd, (void *)out_reg, out_reg_size, true);
     i2c_master_write(cmd, (void *)out_data, out_size, true);
     i2c_master_stop(cmd);
-    esp_err_t ret = i2c_master_cmd_begin((DS3231_inst->i2c_port), cmd, 1000 / portTICK_RATE_MS);
+    esp_err_t ret = i2c_master_cmd_begin((DS3231_inst->i2c_port), cmd, DS3231_I2C_TIMEOUT/portTICK_RATE_MS);
     i2c_cmd_link_delete(cmd);
 
     xSemaphoreGive(DS3231_inst->i2c_bus_mutex);
 
     if (ret != ESP_OK)
     {
-        ESP_LOGE(TAG, "Could not write to device [0x%02x at %d]: returned %d", (DS3231_inst->address), (DS3231_inst->i2c_port), ret);
+        ESP_LOGE(TAG, "Could not write to  ds3231 device at address [0x%02x at %d]: returned %d", (DS3231_inst->address), (DS3231_inst->i2c_port), ret);
     }
 
     return ret; 
@@ -316,7 +321,6 @@ esp_err_t ds3231_get_oscillator_stop_flag(DS3231* DS3231_inst, bool* flag)
 
     *flag = (f ? true : false);
     return ESP_OK;
-
 }
 
 esp_err_t ds3231_clear_oscillator_stop_flag(DS3231* DS3231_inst)
