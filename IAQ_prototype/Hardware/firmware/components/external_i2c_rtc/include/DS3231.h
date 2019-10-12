@@ -21,71 +21,84 @@
 #include <esp_err.h>
 
 /**
- * Alarms
+ * Alarms.
  */
-typedef enum {
-    DS3231_ALARM_NONE = 0,//!< No alarms
-    DS3231_ALARM_1,       //!< First alarm
-    DS3231_ALARM_2,       //!< Second alarm
-    DS3231_ALARM_BOTH     //!< Both alarms
+typedef enum
+{
+    DS3231_ALARM_NONE = 0, /**< No alarm. */
+    DS3231_ALARM_1,        /**< First alarm. */
+    DS3231_ALARM_2,        /**< Second alarm. */
+    DS3231_ALARM_BOTH,     /**< Both alarms. */
+    DS3231_ALARM_MAX = 255 /**< Limits enum size  to 1 byte. */
 } ds3231_alarm_t;
 
 /**
- * First alarm rate
+ * First alarm rate.
  */
-typedef enum {
+typedef enum
+{
     DS3231_ALARM1_EVERY_SECOND = 0,
     DS3231_ALARM1_MATCH_SEC,
     DS3231_ALARM1_MATCH_SECMIN,
     DS3231_ALARM1_MATCH_SECMINHOUR,
     DS3231_ALARM1_MATCH_SECMINHOURDAY,
-    DS3231_ALARM1_MATCH_SECMINHOURDATE
+    DS3231_ALARM1_MATCH_SECMINHOURDATE,
+    DS3231_ALARM1_MATCH_MAX = 255      /**< Limits enum size  to 1 byte. */
 } ds3231_alarm1_rate_t;
 
 /**
  * Second alarm rate
  */
-typedef enum {
+typedef enum
+{
     DS3231_ALARM2_EVERY_MIN = 0,
     DS3231_ALARM2_MATCH_MIN,
     DS3231_ALARM2_MATCH_MINHOUR,
     DS3231_ALARM2_MATCH_MINHOURDAY,
-    DS3231_ALARM2_MATCH_MINHOURDATE
+    DS3231_ALARM2_MATCH_MINHOURDATE,
+    DS3231_ALARM2_MATCH_MAX = 255      /**< Limits enum size  to 1 byte. */
 } ds3231_alarm2_rate_t;
 
 /**
  * Squarewave frequency
  */
-typedef enum {
+typedef enum
+{
     DS3231_SQWAVE_1HZ    = 0x00,
     DS3231_SQWAVE_1024HZ = 0x08,
     DS3231_SQWAVE_4096HZ = 0x10,
     DS3231_SQWAVE_8192HZ = 0x18
+    DS3231_SQWAVE_MAX    = 255      /**< Limits enum size  to 1 byte. */
 } ds3231_sqwave_freq_t;
 
+/**
+ * DS3231 struct
+ */
 typedef struct
 {
     int address;
     i2c_port_t i2c_port;
-
     SemaphoreHandle_t i2c_bus_mutex;
 }DS3231;
 
 
 /**
- * @brief Initialize device descriptor
- * @param dev I2C device descriptor
+ * @brief Initialize DS3231 device on I2C bus
+ * @param DS3231_inst Pointer to DS3231 device struct
+ * @param address I2C address
  * @param port I2C port
- * @param sda_gpio SDA GPIO
- * @param scl_gpio SCL GPIO
+ * @param bus_mutex_I2C access mutex, to be passed by application in case of multipl bus devices
  * @return ESP_OK to indicate success
  */
 esp_err_t ds3231_init(DS3231* DS3231_inst, int address, i2c_port_t port, SemaphoreHandle_t* bus_mutex);
 
 /**
  * @brief Set the time on the rtc
- * Timezone agnostic, pass whatever you like.
- * I suggest using GMT and applying timezone and DST when read back.
+ * Timezone agnostic, pass whatever you like. I suggest using GMT and applying timezone and DST when read back.
+ * This function has been modified to save the struct tm structure output from the ESP32 localtime_r which converts unix time in time_t variable type.
+ * localtime_r does not behave the same as in computer systems as it is meant to take in sntp time as input.
+ * We modify the input so that when time stored is read back it can readily be used by the ESP32's mktime() implementation to obtain the unix time
+ * @param time broken down time form
  * @return ESP_OK to indicate success
  */
 esp_err_t ds3231_set_time(DS3231* DS3231_inst, struct tm *time);
@@ -222,6 +235,7 @@ esp_err_t ds3231_get_temp_float(DS3231* DS3231_inst, float *temp);
 
 /**
  * @brief Get the time from the RTC, populates a supplied tm struct
+ * This function has been modified in line with ds3231_set_time(), to reverse operation.
  * @param dev Device descriptor
  * @param[out] time RTC time
  * @return ESP_OK to indicate success
