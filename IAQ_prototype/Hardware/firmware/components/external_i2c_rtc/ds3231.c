@@ -44,9 +44,9 @@
 #define DS3231_PM_FLAG      0x20
 #define DS3231_MONTH_MASK   0x1f  
 
-static char* TAG = "DS3231";
+static const char* TAG = "DS3231";
 
-static int DS3231_I2C_TIMEOUT = 1000;
+static const int DS3231_I2C_TIMEOUT = 1000;
 
 enum
 {
