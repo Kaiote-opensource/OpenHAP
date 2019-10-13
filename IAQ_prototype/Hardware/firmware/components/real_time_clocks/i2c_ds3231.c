@@ -74,98 +74,98 @@ static uint8_t dec2bcd(uint8_t val)
     return ((val / 10) << 4) + (val % 10);
 }
 
-esp_err_t ds3231_init(DS3231* DS3231_inst, int address, i2c_port_t port, SemaphoreHandle_t* bus_mutex)
+esp_err_t ds3231_init(DS3231* ds3231_inst, int address, i2c_port_t port, SemaphoreHandle_t* bus_mutex)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
-    if(bus_mutex != NULL && DS3231_inst != NULL)
+    if(bus_mutex != NULL && ds3231_inst != NULL)
     {
-        DS3231_inst->address = address;
-        DS3231_inst->i2c_port = port;
-        DS3231_inst->i2c_bus_mutex=*bus_mutex;
+        ds3231_inst->address = address;
+        ds3231_inst->i2c_port = port;
+        ds3231_inst->i2c_bus_mutex=*bus_mutex;
         return ESP_OK;
     }
 
     return ESP_ERR_INVALID_ARG;
 }
 
-static esp_err_t ds3231_i2c_read(const DS3231* DS3231_inst, const void *out_data, size_t out_size, void *in_data, size_t in_size)
+static esp_err_t ds3231_i2c_read(const DS3231* ds3231_inst, const void *out_data, size_t out_size, void *in_data, size_t in_size)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);  
-    if (DS3231_inst == NULL || in_data == NULL || in_size == 0)
+    if (ds3231_inst == NULL || in_data == NULL || in_size == 0)
     {
         return ESP_ERR_INVALID_ARG;
     }
 
-    xSemaphoreTake(DS3231_inst->i2c_bus_mutex, portMAX_DELAY);
+    xSemaphoreTake(ds3231_inst->i2c_bus_mutex, portMAX_DELAY);
 
     i2c_cmd_handle_t cmd = i2c_cmd_link_create();
     if (out_data && out_size)
     {
         i2c_master_start(cmd);
-        i2c_master_write_byte(cmd, (DS3231_inst->address) << 1, true);
+        i2c_master_write_byte(cmd, (ds3231_inst->address) << 1, true);
         i2c_master_write(cmd, (void *)out_data, out_size, true);
     }
     i2c_master_start(cmd);
-    i2c_master_write_byte(cmd, (DS3231_inst->address) << 1 | 1, true);
+    i2c_master_write_byte(cmd, (ds3231_inst->address) << 1 | 1, true);
     i2c_master_read(cmd, in_data, in_size, I2C_MASTER_LAST_NACK);
     i2c_master_stop(cmd);
 
-    esp_err_t ret = i2c_master_cmd_begin((DS3231_inst->i2c_port), cmd, DS3231_I2C_TIMEOUT/portTICK_RATE_MS);
+    esp_err_t ret = i2c_master_cmd_begin((ds3231_inst->i2c_port), cmd, DS3231_I2C_TIMEOUT/portTICK_RATE_MS);
     i2c_cmd_link_delete(cmd);
 
-    xSemaphoreGive(DS3231_inst->i2c_bus_mutex);
+    xSemaphoreGive(ds3231_inst->i2c_bus_mutex);
 
     if (ret != ESP_OK)
     {
-        ESP_LOGE(TAG, "Could not read from ds3231 device at address [0x%02x at %d]: returned %d", (DS3231_inst->address), (DS3231_inst->i2c_port), ret);
+        ESP_LOGE(TAG, "Could not read from ds3231 device at address [0x%02x at %d]: returned %d", (ds3231_inst->address), (ds3231_inst->i2c_port), ret);
     }
 
     return ret;    
 }
 
-static inline esp_err_t ds3231_i2c_read_reg(const DS3231* DS3231_inst, uint8_t reg, void *in_data, size_t in_size)
+static inline esp_err_t ds3231_i2c_read_reg(const DS3231* ds3231_inst, uint8_t reg, void *in_data, size_t in_size)
 {
-    return ds3231_i2c_read(DS3231_inst, &reg, 1, in_data, in_size);
+    return ds3231_i2c_read(ds3231_inst, &reg, 1, in_data, in_size);
 }
 
-esp_err_t ds3231_i2c_write(const DS3231* DS3231_inst, const void *out_reg, size_t out_reg_size, const void *out_data, size_t out_size)
+esp_err_t ds3231_i2c_write(const DS3231* ds3231_inst, const void *out_reg, size_t out_reg_size, const void *out_data, size_t out_size)
 {
-    if (DS3231_inst == NULL || out_data == NULL || out_size == 0)
+    if (ds3231_inst == NULL || out_data == NULL || out_size == 0)
     {
         return ESP_ERR_INVALID_ARG;
     }
 
-    xSemaphoreTake(DS3231_inst->i2c_bus_mutex, portMAX_DELAY);
+    xSemaphoreTake(ds3231_inst->i2c_bus_mutex, portMAX_DELAY);
     
     i2c_cmd_handle_t cmd = i2c_cmd_link_create();
     i2c_master_start(cmd);
-    i2c_master_write_byte(cmd, (DS3231_inst->address) << 1, true);
+    i2c_master_write_byte(cmd, (ds3231_inst->address) << 1, true);
     if (out_reg && out_reg_size)
         i2c_master_write(cmd, (void *)out_reg, out_reg_size, true);
     i2c_master_write(cmd, (void *)out_data, out_size, true);
     i2c_master_stop(cmd);
-    esp_err_t ret = i2c_master_cmd_begin((DS3231_inst->i2c_port), cmd, DS3231_I2C_TIMEOUT/portTICK_RATE_MS);
+    esp_err_t ret = i2c_master_cmd_begin((ds3231_inst->i2c_port), cmd, DS3231_I2C_TIMEOUT/portTICK_RATE_MS);
     i2c_cmd_link_delete(cmd);
 
-    xSemaphoreGive(DS3231_inst->i2c_bus_mutex);
+    xSemaphoreGive(ds3231_inst->i2c_bus_mutex);
 
     if (ret != ESP_OK)
     {
-        ESP_LOGE(TAG, "Could not write to  ds3231 device at address [0x%02x at %d]: returned %d", (DS3231_inst->address), (DS3231_inst->i2c_port), ret);
+        ESP_LOGE(TAG, "Could not write to  ds3231 device at address [0x%02x at %d]: returned %d", (ds3231_inst->address), (ds3231_inst->i2c_port), ret);
     }
 
     return ret; 
 }
 
-static inline esp_err_t ds3231_i2c_write_reg(const DS3231* DS3231_inst, uint8_t reg, const void *out_data, size_t out_size)
+static inline esp_err_t ds3231_i2c_write_reg(const DS3231* ds3231_inst, uint8_t reg, const void *out_data, size_t out_size)
 {
-    return  ds3231_i2c_write(DS3231_inst, &reg, 1, out_data, out_size);
+    return  ds3231_i2c_write(ds3231_inst, &reg, 1, out_data, out_size);
 }
 
-esp_err_t ds3231_set_time(DS3231* DS3231_inst, struct tm *time)
+esp_err_t ds3231_set_time(DS3231* ds3231_inst, struct tm *time)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
-    if (DS3231_inst == NULL || time == NULL)
+    if (ds3231_inst == NULL || time == NULL)
     {
         return ESP_ERR_INVALID_ARG;
     }
@@ -183,15 +183,15 @@ esp_err_t ds3231_set_time(DS3231* DS3231_inst, struct tm *time)
     data[5] = dec2bcd(time->tm_mon + 1);
     data[6] = dec2bcd((time->tm_year+1900)-2000);
 
-    esp_err_t ret = ds3231_i2c_write_reg(DS3231_inst, DS3231_ADDR_TIME, data, 7);
+    esp_err_t ret = ds3231_i2c_write_reg(ds3231_inst, DS3231_ADDR_TIME, data, 7);
 
     return ret;
 }
 
-esp_err_t ds3231_set_alarm(DS3231* DS3231_inst, ds3231_alarm_t alarms, struct tm *time1, ds3231_alarm1_rate_t option1, struct tm *time2, ds3231_alarm2_rate_t option2)
+esp_err_t ds3231_set_alarm(DS3231* ds3231_inst, ds3231_alarm_t alarms, struct tm *time1, ds3231_alarm1_rate_t option1, struct tm *time2, ds3231_alarm2_rate_t option2)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
-    if (DS3231_inst == NULL)
+    if (ds3231_inst == NULL)
     {
         return ESP_ERR_INVALID_ARG;
     }
@@ -214,7 +214,7 @@ esp_err_t ds3231_set_alarm(DS3231* DS3231_inst, ds3231_alarm_t alarms, struct tm
         data[i++] = (option1 == DS3231_ALARM1_MATCH_SECMINHOURDAY ? (dec2bcd(time1->tm_wday + 1) & DS3231_ALARM_WDAY):
                     (option1 == DS3231_ALARM1_MATCH_SECMINHOURDATE ? dec2bcd(time1->tm_mday) : DS3231_ALARM_NOTSET));
 
-        ret = ds3231_i2c_write_reg(DS3231_inst, DS3231_ADDR_ALARM1, data, i);
+        ret = ds3231_i2c_write_reg(ds3231_inst, DS3231_ADDR_ALARM1, data, i);
         if (ret != ESP_OK)
         {
             return ret;
@@ -234,7 +234,7 @@ esp_err_t ds3231_set_alarm(DS3231* DS3231_inst, ds3231_alarm_t alarms, struct tm
         data[i++] = (option2 == DS3231_ALARM2_MATCH_MINHOURDAY ? (dec2bcd(time2->tm_wday + 1) & DS3231_ALARM_WDAY) :
                     (option2 == DS3231_ALARM2_MATCH_MINHOURDATE ? dec2bcd(time2->tm_mday) : DS3231_ALARM_NOTSET));
 
-        ret = ds3231_i2c_write_reg(DS3231_inst, DS3231_ADDR_ALARM1, data, i);
+        ret = ds3231_i2c_write_reg(ds3231_inst, DS3231_ADDR_ALARM1, data, i);
         if (ret != ESP_OK)
         {
             return ret;
@@ -249,14 +249,14 @@ esp_err_t ds3231_set_alarm(DS3231* DS3231_inst, ds3231_alarm_t alarms, struct tm
  * of use a mask of 0xff to just return the whole register byte
  * returns true to indicate success
  */
-static esp_err_t ds3231_get_flag(DS3231* DS3231_inst, uint8_t addr, uint8_t mask, uint8_t *flag)
+static esp_err_t ds3231_get_flag(DS3231* ds3231_inst, uint8_t addr, uint8_t mask, uint8_t *flag)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
 
     uint8_t data = 0;
 
     /* get register */
-    esp_err_t ret = ds3231_i2c_read_reg(DS3231_inst, addr, &data, 1);
+    esp_err_t ret = ds3231_i2c_read_reg(ds3231_inst, addr, &data, 1);
     if (ret != ESP_OK)
     {
         return ret;
@@ -273,14 +273,14 @@ static esp_err_t ds3231_get_flag(DS3231* DS3231_inst, uint8_t addr, uint8_t mask
  * DS3231_SET/DS3231_CLEAR/DS3231_REPLACE
  * returns true to indicate success
  */
-static esp_err_t ds3231_set_flag(DS3231* DS3231_inst, uint8_t addr, uint8_t bits, uint8_t mode)
+static esp_err_t ds3231_set_flag(DS3231* ds3231_inst, uint8_t addr, uint8_t bits, uint8_t mode)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
 
     uint8_t data = 0;
 
     /* get status register */
-    esp_err_t ret = ds3231_i2c_read_reg(DS3231_inst, addr, &data, 1);
+    esp_err_t ret = ds3231_i2c_read_reg(ds3231_inst, addr, &data, 1);
     if (ret != ESP_OK)
     {
         return ret;
@@ -300,20 +300,20 @@ static esp_err_t ds3231_set_flag(DS3231* DS3231_inst, uint8_t addr, uint8_t bits
         data &= ~bits;
     }
 
-    return ds3231_i2c_write_reg(DS3231_inst, addr, &data, 1);
+    return ds3231_i2c_write_reg(ds3231_inst, addr, &data, 1);
 }
 
-esp_err_t ds3231_get_oscillator_stop_flag(DS3231* DS3231_inst, bool* flag)
+esp_err_t ds3231_get_oscillator_stop_flag(DS3231* ds3231_inst, bool* flag)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
-    if (DS3231_inst == NULL || flag == NULL)
+    if (ds3231_inst == NULL || flag == NULL)
     {
         return ESP_ERR_INVALID_ARG;
     }
 
     uint8_t f;
 
-    esp_err_t ret = ds3231_get_flag(DS3231_inst, DS3231_ADDR_STATUS, DS3231_STAT_OSCILLATOR, &f);
+    esp_err_t ret = ds3231_get_flag(ds3231_inst, DS3231_ADDR_STATUS, DS3231_STAT_OSCILLATOR, &f);
     if(ret != ESP_OK)
     {
         return ret;
@@ -323,58 +323,58 @@ esp_err_t ds3231_get_oscillator_stop_flag(DS3231* DS3231_inst, bool* flag)
     return ESP_OK;
 }
 
-esp_err_t ds3231_clear_oscillator_stop_flag(DS3231* DS3231_inst)
+esp_err_t ds3231_clear_oscillator_stop_flag(DS3231* ds3231_inst)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
-    if (DS3231_inst == NULL)
+    if (ds3231_inst == NULL)
     {
         return ESP_ERR_INVALID_ARG;
     }
 
-    esp_err_t ret = ds3231_set_flag(DS3231_inst, DS3231_ADDR_STATUS, DS3231_STAT_OSCILLATOR, DS3231_CLEAR);
+    esp_err_t ret = ds3231_set_flag(ds3231_inst, DS3231_ADDR_STATUS, DS3231_STAT_OSCILLATOR, DS3231_CLEAR);
     return ret;
 }
 
-esp_err_t ds3231_get_alarm_flags(DS3231* DS3231_inst, ds3231_alarm_t* alarms)
+esp_err_t ds3231_get_alarm_flags(DS3231* ds3231_inst, ds3231_alarm_t* alarms)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
-    if (DS3231_inst == NULL || alarms == NULL)
+    if (ds3231_inst == NULL || alarms == NULL)
     {
         return ESP_ERR_INVALID_ARG;
     }
 
-    esp_err_t ret = ds3231_get_flag(DS3231_inst, DS3231_ADDR_STATUS, DS3231_ALARM_BOTH, (uint8_t *)alarms);
+    esp_err_t ret = ds3231_get_flag(ds3231_inst, DS3231_ADDR_STATUS, DS3231_ALARM_BOTH, (uint8_t *)alarms);
     return ret;
 }
 
-esp_err_t ds3231_clear_alarm_flags(DS3231* DS3231_inst, ds3231_alarm_t alarms)
+esp_err_t ds3231_clear_alarm_flags(DS3231* ds3231_inst, ds3231_alarm_t alarms)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
-    if (DS3231_inst == NULL)
+    if (ds3231_inst == NULL)
     {
         return ESP_ERR_INVALID_ARG;
     }
 
-    esp_err_t ret = ds3231_set_flag(DS3231_inst, DS3231_ADDR_STATUS, alarms, DS3231_CLEAR);
+    esp_err_t ret = ds3231_set_flag(ds3231_inst, DS3231_ADDR_STATUS, alarms, DS3231_CLEAR);
     return ret;
 }
 
-esp_err_t ds3231_enable_alarm_ints(DS3231* DS3231_inst, ds3231_alarm_t alarms)
+esp_err_t ds3231_enable_alarm_ints(DS3231* ds3231_inst, ds3231_alarm_t alarms)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
-    if (DS3231_inst == NULL)
+    if (ds3231_inst == NULL)
     {
         return ESP_ERR_INVALID_ARG;
     }
 
-    esp_err_t ret = ds3231_set_flag(DS3231_inst, DS3231_ADDR_CONTROL, DS3231_CTRL_ALARM_INTS | alarms, DS3231_SET);
+    esp_err_t ret = ds3231_set_flag(ds3231_inst, DS3231_ADDR_CONTROL, DS3231_CTRL_ALARM_INTS | alarms, DS3231_SET);
     return ret;
 }
 
-esp_err_t ds3231_disable_alarm_ints(DS3231* DS3231_inst, ds3231_alarm_t alarms)
+esp_err_t ds3231_disable_alarm_ints(DS3231* ds3231_inst, ds3231_alarm_t alarms)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
-    if (DS3231_inst == NULL)
+    if (ds3231_inst == NULL)
     {
         return ESP_ERR_INVALID_ARG;
     }
@@ -382,69 +382,69 @@ esp_err_t ds3231_disable_alarm_ints(DS3231* DS3231_inst, ds3231_alarm_t alarms)
     /* Just disable specific alarm(s) requested
      * does not disable alarm interrupts generally (which would enable the squarewave)
      */
-    esp_err_t ret = ds3231_set_flag(DS3231_inst, DS3231_ADDR_CONTROL, alarms, DS3231_CLEAR);
+    esp_err_t ret = ds3231_set_flag(ds3231_inst, DS3231_ADDR_CONTROL, alarms, DS3231_CLEAR);
     return ret;
 }
 
-esp_err_t ds3231_enable_32khz(DS3231* DS3231_inst)
+esp_err_t ds3231_enable_32khz(DS3231* ds3231_inst)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
-    if (DS3231_inst == NULL)
+    if (ds3231_inst == NULL)
     {
         return ESP_ERR_INVALID_ARG;
     }
 
-    esp_err_t ret = ds3231_set_flag(DS3231_inst, DS3231_ADDR_STATUS, DS3231_STAT_32KHZ, DS3231_SET);
+    esp_err_t ret = ds3231_set_flag(ds3231_inst, DS3231_ADDR_STATUS, DS3231_STAT_32KHZ, DS3231_SET);
     return ret;
 }
 
-esp_err_t ds3231_disable_32khz(DS3231* DS3231_inst)
+esp_err_t ds3231_disable_32khz(DS3231* ds3231_inst)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
-    if (DS3231_inst == NULL)
+    if (ds3231_inst == NULL)
     {
         return ESP_ERR_INVALID_ARG;
     }
 
-    esp_err_t ret = ds3231_set_flag(DS3231_inst, DS3231_ADDR_STATUS, DS3231_STAT_32KHZ, DS3231_CLEAR);
+    esp_err_t ret = ds3231_set_flag(ds3231_inst, DS3231_ADDR_STATUS, DS3231_STAT_32KHZ, DS3231_CLEAR);
     return ret;
 }
 
-esp_err_t ds3231_enable_squarewave(DS3231* DS3231_inst)
+esp_err_t ds3231_enable_squarewave(DS3231* ds3231_inst)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
-    if (DS3231_inst == NULL)
+    if (ds3231_inst == NULL)
     {
         return ESP_ERR_INVALID_ARG;
     }
 
-    esp_err_t ret = ds3231_set_flag(DS3231_inst, DS3231_ADDR_CONTROL, DS3231_CTRL_ALARM_INTS, DS3231_CLEAR);
+    esp_err_t ret = ds3231_set_flag(ds3231_inst, DS3231_ADDR_CONTROL, DS3231_CTRL_ALARM_INTS, DS3231_CLEAR);
     return ret;
 }
 
-esp_err_t ds3231_disable_squarewave(DS3231* DS3231_inst)
+esp_err_t ds3231_disable_squarewave(DS3231* ds3231_inst)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
-    if (DS3231_inst == NULL)
+    if (ds3231_inst == NULL)
     {
         return ESP_ERR_INVALID_ARG;
     }
 
-    esp_err_t ret = ds3231_set_flag(DS3231_inst, DS3231_ADDR_CONTROL, DS3231_CTRL_ALARM_INTS, DS3231_SET);
+    esp_err_t ret = ds3231_set_flag(ds3231_inst, DS3231_ADDR_CONTROL, DS3231_CTRL_ALARM_INTS, DS3231_SET);
     return ret;
 }
 
-esp_err_t ds3231_set_squarewave_freq(DS3231* DS3231_inst, ds3231_sqwave_freq_t freq)
+esp_err_t ds3231_set_squarewave_freq(DS3231* ds3231_inst, ds3231_sqwave_freq_t freq)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
-    if (DS3231_inst == NULL)
+    if (ds3231_inst == NULL)
     {
         return ESP_ERR_INVALID_ARG;
     }
 
     uint8_t flag = 0;
 
-    esp_err_t ret = ds3231_get_flag(DS3231_inst, DS3231_ADDR_CONTROL, 0xff, &flag);
+    esp_err_t ret = ds3231_get_flag(ds3231_inst, DS3231_ADDR_CONTROL, 0xff, &flag);
     if(ret != ESP_OK)
     {
         return ret;
@@ -452,21 +452,21 @@ esp_err_t ds3231_set_squarewave_freq(DS3231* DS3231_inst, ds3231_sqwave_freq_t f
 
     flag &= ~DS3231_SQWAVE_8192HZ;
     flag |= freq;
-    ret = ds3231_set_flag(DS3231_inst, DS3231_ADDR_CONTROL, flag, DS3231_REPLACE);
+    ret = ds3231_set_flag(ds3231_inst, DS3231_ADDR_CONTROL, flag, DS3231_REPLACE);
     return ret;
 }
 
-esp_err_t ds3231_get_raw_temp(DS3231* DS3231_inst, int16_t* temp)
+esp_err_t ds3231_get_raw_temp(DS3231* ds3231_inst, int16_t* temp)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
-    if (DS3231_inst == NULL || temp== NULL)
+    if (ds3231_inst == NULL || temp== NULL)
     {
         return ESP_ERR_INVALID_ARG;
     }
 
     uint8_t data[2] = {0};
 
-    esp_err_t ret = ds3231_i2c_read_reg(DS3231_inst, DS3231_ADDR_TEMP, data, sizeof(data));
+    esp_err_t ret = ds3231_i2c_read_reg(ds3231_inst, DS3231_ADDR_TEMP, data, sizeof(data));
     if(ret != ESP_OK)
     {
         return ret;
@@ -476,17 +476,17 @@ esp_err_t ds3231_get_raw_temp(DS3231* DS3231_inst, int16_t* temp)
     return ESP_OK;
 }
 
-esp_err_t ds3231_get_temp_integer(DS3231* DS3231_inst, int8_t* temp)
+esp_err_t ds3231_get_temp_integer(DS3231* ds3231_inst, int8_t* temp)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
-    if (DS3231_inst == NULL || temp == NULL)
+    if (ds3231_inst == NULL || temp == NULL)
     {
         return ESP_ERR_INVALID_ARG;
     }
 
     int16_t t_int = 0;
 
-    esp_err_t ret = ds3231_get_raw_temp(DS3231_inst, &t_int);
+    esp_err_t ret = ds3231_get_raw_temp(ds3231_inst, &t_int);
     if (ret != ESP_OK)
     {
         return ret;
@@ -496,17 +496,17 @@ esp_err_t ds3231_get_temp_integer(DS3231* DS3231_inst, int8_t* temp)
     return ESP_OK;
 }
 
-esp_err_t ds3231_get_temp_float(DS3231* DS3231_inst, float* temp)
+esp_err_t ds3231_get_temp_float(DS3231* ds3231_inst, float* temp)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
-    if (DS3231_inst ==NULL || temp == NULL)
+    if (ds3231_inst ==NULL || temp == NULL)
     {
         return ESP_ERR_INVALID_ARG;
     }
 
     int16_t t_int = 0;
 
-    esp_err_t ret = ds3231_get_raw_temp(DS3231_inst, &t_int);
+    esp_err_t ret = ds3231_get_raw_temp(ds3231_inst, &t_int);
     if (ret == ESP_OK)
     {
         return ret;
@@ -516,10 +516,10 @@ esp_err_t ds3231_get_temp_float(DS3231* DS3231_inst, float* temp)
     return ESP_OK;
 }
 
-esp_err_t ds3231_get_time(DS3231* DS3231_inst, struct tm* time)
+esp_err_t ds3231_get_time(DS3231* ds3231_inst, struct tm* time)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
-    if (DS3231_inst ==NULL || time == NULL)
+    if (ds3231_inst ==NULL || time == NULL)
     {
         return ESP_ERR_INVALID_ARG;
     }
@@ -527,7 +527,7 @@ esp_err_t ds3231_get_time(DS3231* DS3231_inst, struct tm* time)
     uint8_t data[7] = {0};
 
     /* read time */
-    esp_err_t ret; = ds3231_i2c_read_reg(DS3231_inst, DS3231_ADDR_TIME, data, 7);
+    esp_err_t ret; = ds3231_i2c_read_reg(ds3231_inst, DS3231_ADDR_TIME, data, 7);
     if(ret != ESP_OK)
     {
         return ret;

@@ -84,13 +84,13 @@ typedef struct
 
 /**
  * @brief Initialize DS3231 device on I2C bus
- * @param DS3231_inst Pointer to DS3231 device struct
+ * @param ds3231_inst Pointer to DS3231 device struct
  * @param address I2C address
  * @param port I2C port
  * @param bus_mutex_I2C access mutex, to be passed by application in case of multipl bus devices
  * @return ESP_OK to indicate success
  */
-esp_err_t ds3231_init(DS3231* DS3231_inst, int address, i2c_port_t port, SemaphoreHandle_t* bus_mutex);
+esp_err_t ds3231_init(DS3231* ds3231_inst, int address, i2c_port_t port, SemaphoreHandle_t* bus_mutex);
 
 /**
  * @brief Set the time on the rtc
@@ -101,7 +101,7 @@ esp_err_t ds3231_init(DS3231* DS3231_inst, int address, i2c_port_t port, Semapho
  * @param time broken down time form
  * @return ESP_OK to indicate success
  */
-esp_err_t ds3231_set_time(DS3231* DS3231_inst, struct tm *time);
+esp_err_t ds3231_set_time(DS3231* ds3231_inst, struct tm *time);
 
 /**
  * @brief Set alarms
@@ -115,7 +115,7 @@ esp_err_t ds3231_set_time(DS3231* DS3231_inst, struct tm *time);
  * if you want to enable interrupts for the alarms you need to do that separately
  * @return ESP_OK to indicate success
  */
-esp_err_t ds3231_set_alarm(DS3231* DS3231_inst, ds3231_alarm_t alarms, struct tm *time1,
+esp_err_t ds3231_set_alarm(DS3231* ds3231_inst, ds3231_alarm_t alarms, struct tm *time1,
         ds3231_alarm1_rate_t option1, struct tm *time2, ds3231_alarm2_rate_t option2);
 
 /**
@@ -125,14 +125,14 @@ esp_err_t ds3231_set_alarm(DS3231* DS3231_inst, ds3231_alarm_t alarms, struct tm
  * @param[out] flag Stop flag
  * @return ESP_OK to indicate success
  */
-esp_err_t ds3231_get_oscillator_stop_flag(DS3231* DS3231_inst, bool *flag);
+esp_err_t ds3231_get_oscillator_stop_flag(DS3231* ds3231_inst, bool *flag);
 
 /**
  * @brief Clear the oscillator stopped flag
  * @param dev Device descriptor
  * @return ESP_OK to indicate success
  */
-esp_err_t ds3231_clear_oscillator_stop_flag(DS3231* DS3231_inst);
+esp_err_t ds3231_clear_oscillator_stop_flag(DS3231* ds3231_inst);
 
 /**
  * @brief Check which alarm(s) have past
@@ -141,7 +141,7 @@ esp_err_t ds3231_clear_oscillator_stop_flag(DS3231* DS3231_inst);
  * @param[out] alarms Alarms
  * @return ESP_OK to indicate success
  */
-esp_err_t ds3231_get_alarm_flags(DS3231* DS3231_inst, ds3231_alarm_t *alarms);
+esp_err_t ds3231_get_alarm_flags(DS3231* ds3231_inst, ds3231_alarm_t *alarms);
 
 /**
  * @brief Clear alarm past flag(s)
@@ -150,7 +150,7 @@ esp_err_t ds3231_get_alarm_flags(DS3231* DS3231_inst, ds3231_alarm_t *alarms);
  * @param alarms Alarms
  * @return ESP_OK to indicate success
  */
-esp_err_t ds3231_clear_alarm_flags(DS3231* DS3231_inst, ds3231_alarm_t alarms);
+esp_err_t ds3231_clear_alarm_flags(DS3231* ds3231_inst, ds3231_alarm_t alarms);
 
 /**
  * @brief enable alarm interrupts (and disables squarewave)
@@ -162,7 +162,7 @@ esp_err_t ds3231_clear_alarm_flags(DS3231* DS3231_inst, ds3231_alarm_t alarms);
  * @param alarms Alarms
  * @return ESP_OK to indicate success
  */
-esp_err_t ds3231_enable_alarm_ints(DS3231* DS3231_inst, ds3231_alarm_t alarms);
+esp_err_t ds3231_enable_alarm_ints(DS3231* ds3231_inst, ds3231_alarm_t alarms);
 
 /**
  * @brief Disable alarm interrupts (does not (re-)enable squarewave)
@@ -170,28 +170,28 @@ esp_err_t ds3231_enable_alarm_ints(DS3231* DS3231_inst, ds3231_alarm_t alarms);
  * @param alarms Alarm
  * @return ESP_OK to indicate success
  */
-esp_err_t ds3231_disable_alarm_ints(DS3231* DS3231_inst, ds3231_alarm_t alarms);
+esp_err_t ds3231_disable_alarm_ints(DS3231* ds3231_inst, ds3231_alarm_t alarms);
 
 /**
  * @brief Enable the output of 32khz signal
  * @param dev Device descriptor
  * @return ESP_OK to indicate success
  */
-esp_err_t ds3231_enable_32khz(DS3231* DS3231_inst);
+esp_err_t ds3231_enable_32khz(DS3231* ds3231_inst);
 
 /**
  * @brief Disable the output of 32khz signal
  * @param dev Device descriptor
  * @return ESP_OK to indicate success
  */
-esp_err_t ds3231_disable_32khz(DS3231* DS3231_inst);
+esp_err_t ds3231_disable_32khz(DS3231* ds3231_inst);
 
 /**
  * @brief Enable the squarewave output (disables alarm interrupt functionality)
  * @param dev Device descriptor
  * @return ESP_OK to indicate success
  */
-esp_err_t ds3231_enable_squarewave(DS3231* DS3231_inst);
+esp_err_t ds3231_enable_squarewave(DS3231* ds3231_inst);
 
 /**
  * @brief Disable the squarewave output (which re-enables alarm interrupts, but individual
@@ -199,7 +199,7 @@ esp_err_t ds3231_enable_squarewave(DS3231* DS3231_inst);
  * @param dev Device descriptor
  * @return ESP_OK to indicate success
  */
-esp_err_t ds3231_disable_squarewave(DS3231* DS3231_inst);
+esp_err_t ds3231_disable_squarewave(DS3231* ds3231_inst);
 
 /**
  * @brief Set the frequency of the squarewave output (but does not enable it)
@@ -207,7 +207,7 @@ esp_err_t ds3231_disable_squarewave(DS3231* DS3231_inst);
  * @param freq Squarewave frequency
  * @return ESP_OK to indicate success
  */
-esp_err_t ds3231_set_squarewave_freq(DS3231* DS3231_inst, ds3231_sqwave_freq_t freq);
+esp_err_t ds3231_set_squarewave_freq(DS3231* ds3231_inst, ds3231_sqwave_freq_t freq);
 
 /**
  * @brief Get the raw temperature value
@@ -215,7 +215,7 @@ esp_err_t ds3231_set_squarewave_freq(DS3231* DS3231_inst, ds3231_sqwave_freq_t f
  * @param[out] temp Raw temperature value
  * @return ESP_OK to indicate success
  */
-esp_err_t ds3231_get_raw_temp(DS3231* DS3231_inst, int16_t *temp);
+esp_err_t ds3231_get_raw_temp(DS3231* ds3231_inst, int16_t *temp);
 
 /**
  * @brief Get the temperature as an integer
@@ -223,7 +223,7 @@ esp_err_t ds3231_get_raw_temp(DS3231* DS3231_inst, int16_t *temp);
  * @param[out] temp Temperature, degrees Celsius
  * @return ESP_OK to indicate success
  */
-esp_err_t ds3231_get_temp_integer(DS3231* DS3231_inst, int8_t *temp);
+esp_err_t ds3231_get_temp_integer(DS3231* ds3231_inst, int8_t *temp);
 
 /**
  * @brief Get the temperature as a float
@@ -231,7 +231,7 @@ esp_err_t ds3231_get_temp_integer(DS3231* DS3231_inst, int8_t *temp);
  * @param[out] temp Temperature, degrees Celsius
  * @return ESP_OK to indicate success
  */
-esp_err_t ds3231_get_temp_float(DS3231* DS3231_inst, float *temp);
+esp_err_t ds3231_get_temp_float(DS3231* ds3231_inst, float *temp);
 
 /**
  * @brief Get the time from the RTC, populates a supplied tm struct
@@ -240,6 +240,6 @@ esp_err_t ds3231_get_temp_float(DS3231* DS3231_inst, float *temp);
  * @param[out] time RTC time
  * @return ESP_OK to indicate success
  */
-esp_err_t ds3231_get_time(DS3231* DS3231_inst, struct tm *time);
+esp_err_t ds3231_get_time(DS3231* ds3231_inst, struct tm *time);
 
 #endif /* __I2C_DS3231_H__ */
