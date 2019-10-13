@@ -10,8 +10,8 @@
  * MIT Licensed as described in the file LICENSE
  */
 
-#ifndef __DS3231_H__
-#define __DS3231_H__
+#ifndef __I2C_DS3231_H__
+#define __I2C_DS3231_H__
 
 #include <time.h>
 #include <stdbool.h>
@@ -242,4 +242,4 @@ esp_err_t ds3231_get_temp_float(DS3231* DS3231_inst, float *temp);
  */
 esp_err_t ds3231_get_time(DS3231* DS3231_inst, struct tm *time);
 
-#endif /* __DS3231_H__ */
+#endif /* __I2C_DS3231_H__ */
