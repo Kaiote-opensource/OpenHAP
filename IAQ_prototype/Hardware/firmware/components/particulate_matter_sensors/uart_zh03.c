@@ -2,28 +2,41 @@
 #include "freertos/task.h"
 #include "esp_err.h"
 #include "esp_log.h"
-#include "ZH03.h"
+#include "uart_zh03.h"
+
+
+/*Measurement packet layout*/
+#define ZH03_START_BYTE_2_POS           2
+#define ZH03_FRAME_LENGTH_POS           4
+#define ZH03_PM_1_HIGH_BYTE_POS         11
+#define ZH03_PM_1_LOW_BYTE_POS          12
+#define ZH03_PM_2_5_HIGH_BYTE_POS       13
+#define ZH03_PM_2_5_LOW_BYTE_POS        14
+#define ZH03_PM_10_HIGH_BYTE_POS        15
+#define ZH03_PM_10_LOW_BYTE_POS         16
+#define ZH03_CHECKSUM_HIGH_BYTE_POS     23
+#define ZH03_CHECKSUM_LOW_BYTE_POS      24
 
 #define RX_BUF_SIZE 1024
 #define ZH03B_PACKET_LENGTH 9
 
 static char* TAG = "ZH03";
-static int timeout_ms = 1500;
 
-esp_err_t setup_particulate_sensor(ZH03* ZH03_inst, uart_port_t uart_num, int baudrate, int txd_pin, int rxd_pin)
+static int ZH03B_UART_TIMEOUT = 1500;
+
+static uint8_t set_QA_command[ZH03B_PACKET_LENGTH] = {0xFF, 0x01, 0x78, 0x41, 0x00, 0x00, 0x00, 0x00, 0x46};
+static uint8_t set_initiative_upload_command[ZH03B_PACKET_LENGTH] = {0xFF, 0x01, 0x78, 0x40, 0x00, 0x00, 0x00, 0x00, 0x47};
+static uint8_t set_dormant_command[ZH03B_PACKET_LENGTH] = {0xFF, 0x01, 0xA7, 0x01, 0x00, 0x00, 0x00, 0x00, 0x57};
+static uint8_t unset_dormant_command[ZH03B_PACKET_LENGTH] = {0xFF, 0x01, 0xA7, 0x00, 0x00, 0x00, 0x00, 0x00, 0x58};
+static uint8_t QA_command[ZH03B_PACKET_LENGTH] = {0xFF, 0x01, 0x86, 0x00, 0x00, 0x00, 0x00, 0x00, 0x79};
+
+esp_err_t particulate_matter_sensor_init(ZH03* zh03_inst, uart_port_t uart_num, int baudrate, int txd_pin, int rxd_pin)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
-
-    if(ZH03_inst == NULL)
+    if(zh03_inst == NULL || uart_num > UART_NUM_MAX)
     {
         return ESP_ERR_INVALID_ARG;
     }
-    if(uart_num > UART_NUM_MAX || uart_num <= UART_NUM_0)
-    {
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    esp_err_t ret;   
     
     uart_config_t uart_config =
     {
@@ -34,7 +47,7 @@ esp_err_t setup_particulate_sensor(ZH03* ZH03_inst, uart_port_t uart_num, int ba
         .flow_ctrl = UART_HW_FLOWCTRL_DISABLE
     };
 
-    ret = uart_param_config(uart_num, &uart_config);
+    esp_err_t ret = uart_param_config(uart_num, &uart_config);
     if (ret != ESP_OK)
     {
         return ret;
@@ -47,79 +60,37 @@ esp_err_t setup_particulate_sensor(ZH03* ZH03_inst, uart_port_t uart_num, int ba
     ret = uart_driver_install(uart_num, RX_BUF_SIZE * 2, 0, 0, NULL, 0);
     if(ret == ESP_OK)
     {
-        ZH03_inst->uart_port = uart_num;
+        zh03_inst->uart_port = uart_num;
     }
     return ret;
 }
 
-esp_err_t set_QA_mode(ZH03* ZH03_inst)
+static esp_err_t zh03b_uart_read(const ZH03* zh03_inst, void* in_data, int* in_size)
 {
-    ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
-
-    const uint8_t set_QA_command[ZH03B_PACKET_LENGTH] = {0xFF, 0x01, 0x78, 0x41, 0x00, 0x00, 0x00, 0x00, 0x46};
-
-    int txBytes = uart_write_bytes(ZH03_inst->uart_port, (char*)set_QA_command, ZH03B_PACKET_LENGTH);
-
-    if(txBytes != ZH03B_PACKET_LENGTH)
+    ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);  
+    if(zh03_inst == NULL || in_data == NULL)
     {
-        ESP_LOGE(TAG, "'set QA' command failed, command length was %d bytes, wrote %d bytes", ZH03B_PACKET_LENGTH, txBytes);
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    int rx_bytes = uart_read_bytes(zh03_inst->uart_port, (uint8_t*)in_data, RX_BUF_SIZE, ZH03B_UART_TIMEOUT/portTICK_RATE_MS);
+    if(rx_bytes == -1)
+    {
+        ESP_LOGE(TAG, "Failed to receive Uart bytes");
         return ESP_FAIL;
     }
 
-    ESP_LOGI(TAG, "Wrote all 'set QA' command bytes successfully");
+    *in_size = rx_bytes;
     return ESP_OK;
 }
 
-esp_err_t set_initiative_upload_mode(ZH03* ZH03_inst)
+static esp_err_t zh03b_command_response_parse(void* in_data, int* in_size)
 {
-    ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
-
-    const uint8_t set_initiative_upload_command[ZH03B_PACKET_LENGTH] = {0xFF, 0x01, 0x78, 0x40, 0x00, 0x00, 0x00, 0x00, 0x47};
-
-    int txBytes = uart_write_bytes(ZH03_inst->uart_port, (char*)set_initiative_upload_command, ZH03B_PACKET_LENGTH);
-
-    if(txBytes != ZH03B_PACKET_LENGTH)
+    if (rx_bytes >= ZH03B_PACKET_LENGTH) 
     {
-        ESP_LOGE(TAG, "'set initiative upload' command failed, command length was %d bytes, wrote %d bytes", ZH03B_PACKET_LENGTH, txBytes);
-        return ESP_FAIL;
-    }
-
-    ESP_LOGI(TAG, "Wrote all 'set initiative upload' command bytes successfully");
-    return ESP_OK;
-}
-
-esp_err_t set_dormant_mode(ZH03* ZH03_inst)
-{
-    ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
-
-    uint8_t data[RX_BUF_SIZE]={0};
-    uint8_t checksum = 0;
-    uint8_t sent_checksum = 0;
-
-    const uint8_t set_dormant_command[ZH03B_PACKET_LENGTH] = {0xFF, 0x01, 0xA7, 0x01, 0x00, 0x00, 0x00, 0x00, 0x57};
-
-    int txBytes = uart_write_bytes(ZH03_inst->uart_port, (char*)set_dormant_command, ZH03B_PACKET_LENGTH);
-
-    if(txBytes != ZH03B_PACKET_LENGTH)
-    {
-        ESP_LOGE(TAG, "'set dormant' command failed, command length was %d bytes, wrote %d bytes", ZH03B_PACKET_LENGTH, txBytes);
-        return ESP_FAIL;
-    }
-
-    ESP_LOGI(TAG, "Wrote all 'set dormant' command bytes successfully");
-
-    int rxBytes = uart_read_bytes(ZH03_inst->uart_port, data, RX_BUF_SIZE, 1000/portTICK_RATE_MS);
-
-    if(rxBytes == -1)
-    {
-        ESP_LOGI(TAG, "Could not get 'set dormant' command response bytes from port");
-        return ESP_FAIL;
-    }
-    if (rxBytes >= ZH03B_PACKET_LENGTH) 
-    {
-        ESP_LOGI(TAG, "Read %d bytes", rxBytes);
-        ESP_LOG_BUFFER_HEXDUMP(TAG, data, rxBytes, ESP_LOG_INFO);
-        for(int i=0; i < rxBytes-1; i++)
+        ESP_LOGI(TAG, "Read %d bytes", rx_bytes);
+        ESP_LOG_BUFFER_HEXDUMP(TAG, data, rx_bytes, ESP_LOG_INFO);
+        for(int i=0; i < rx_bytes-1; i++)
         {
             if(data[i] == 0xFF)
             {
@@ -156,41 +127,123 @@ esp_err_t set_dormant_mode(ZH03* ZH03_inst)
             }
         }
     }
+}
+
+static esp_err_t zh03b_uart_write(const ZH03* zh03_inst, const void* out_data, size_t out_size)
+{
+    ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);  
+    if(zh03_inst == NULL || out_data == NULL || out_size == 0)
+    {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    int tx_bytes = uart_write_bytes(zh03_inst->uart_port, (char*)out_data, out_size);
+    if(tx_bytes != out_size)
+    {
+        ESP_LOGE(TAG, "Uart write failed, length is %d bytes, wrote %d bytes", command_name, out_size, tx_bytes);
+        return ESP_FAIL;
+    }
+    ESP_LOGI(TAG, "Wrote all Uart bytes successfully", command_name);       
+    return ret;    
+}
+
+esp_err_t set_QA_mode(ZH03* zh03_inst)
+{
+    ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
+    if(zh03_inst == NULL)
+    {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    esp_err_t ret = zh03b_uart_write(zh03_inst, set_QA_command, ZH03B_PACKET_LENGTH);
+    return ret;
+}
+
+esp_err_t set_initiative_upload_mode(ZH03* zh03_inst)
+{
+    ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
+    if(zh03_inst == NULL)
+    {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    esp_err_t ret = zh03b_uart_write(zh03_inst, set_initiative_upload_command, ZH03B_PACKET_LENGTH);
+    return ret;
+}
+
+esp_err_t set_dormant_mode(ZH03* zh03_inst)
+{
+    ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
+    if(zh03_inst == NULL)
+    {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    char* command = "SET_DORMANT_MODE";
+
+    uint8_t data[RX_BUF_SIZE]={0};
+    uint8_t checksum = 0;
+    uint8_t sent_checksum = 0;
+    int rx_bytes = 0;
+
+    esp_err_t ret = zh03b_uart_write(zh03_inst, set_dormant_command, ZH03B_PACKET_LENGTH);
+    if(ret != ESP_OK)
+    {
+        //Do something? Maybe pass a function pointer to act as the exception handler from user code?
+        ESP_LOGE(TAG, "[%s] command transmit failed", command);
+    }
+
+    ESP_LOGI(TAG, "[%s] command transmit successful", command_name);
+    ret = zh03b_uart_read(zh03_inst, data, &rx_bytes)
+    if(ret != ESP_OK)
+    {
+        //Do something? Maybe pass a function pointer to act as the exception handler from user code?   
+        ESP_LOGE(TAG, "[%s] command receive failed", command);     
+    }
+
+    ESP_LOGI(TAG, "[%s] command receive successful", command_name);
+    ret = zh03b_command_response_parse(data, &rx_bytes);
     return ESP_OK;
 }
 
-esp_err_t unset_dormant_mode(ZH03* ZH03_inst)
+esp_err_t unset_dormant_mode(ZH03* zh03_inst)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
+    if(zh03_inst == NULL)
+    {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    char* command = "UNSET_DORMANT_MODE";
 
     uint8_t data[RX_BUF_SIZE]={0};
     uint8_t checksum = 0;
     uint8_t sent_checksum = 0;
 
-    const uint8_t unset_dormant_command[ZH03B_PACKET_LENGTH] = {0xFF, 0x01, 0xA7, 0x00, 0x00, 0x00, 0x00, 0x00, 0x58};
-
-    int txBytes = uart_write_bytes(ZH03_inst->uart_port, (char*)unset_dormant_command, ZH03B_PACKET_LENGTH);
-
-    if(txBytes != ZH03B_PACKET_LENGTH)
+    esp_err_t ret = zh03b_uart_write(zh03_inst, unset_dormant_command, ZH03B_PACKET_LENGTH);
+    if(ret != ESP_OK)
     {
-        ESP_LOGE(TAG, "'unset dormant' command failed, command length was %d bytes, wrote %d bytes", ZH03B_PACKET_LENGTH, txBytes);
+        ESP_LOGE(TAG, "[%s] command transmit failed", command);
         return ESP_FAIL;
     }
 
-    ESP_LOGI(TAG, "Wrote all 'unset dormant' command bytes successfully");
-
-    int rxBytes = uart_read_bytes(ZH03_inst->uart_port, data, RX_BUF_SIZE, 1000/portTICK_RATE_MS);
-
-    if(rxBytes == -1)
+    ESP_LOGI(TAG, "[%s] command transmit successful", command_name);
+    ret = zh03b_uart_read(zh03_inst, data, &rx_bytes)
+    if(ret != ESP_OK)
     {
-        ESP_LOGI(TAG, "Could not get 'unset dormant' command response bytes from port");
-        return ESP_FAIL;
+        //Do something? Maybe pass a function pointer to act as the exception handler from user code?   
+        ESP_LOGE(TAG, "[%s] command receive failed", command);     
     }
-    if (rxBytes >= ZH03B_PACKET_LENGTH) 
+
+    ESP_LOGI(TAG, "[%s] command receive successful", command_name);
+    /**
+    * Check if we have data greater than or equal to the packet length, due to asychronous UART communications
+    */
+    if (rx_bytes >= ZH03B_PACKET_LENGTH) 
     {
-        ESP_LOGI(TAG, "Read %d bytes", rxBytes);
-        ESP_LOG_BUFFER_HEXDUMP(TAG, data, rxBytes, ESP_LOG_INFO);
-        for(int i=0; i < rxBytes-1; i++)
+        ESP_LOGI(TAG, "Read %d bytes", rx_bytes);
+        /*ESP_LOG_BUFFER_HEXDUMP(TAG, data, rx_bytes, ESP_LOG_INFO);*/
+        for(int i=0; i < rx_bytes-1; i++)
         {
             if(data[i] == 0xFF)
             {
@@ -202,7 +255,7 @@ esp_err_t unset_dormant_mode(ZH03* ZH03_inst)
                     {
                         checksum += data[i+j];
                     }
-                    /*Take two's complement*/
+                    /*Calculate checksum as per datasheet*/
                     checksum = ~checksum;
                     checksum += 1;
                     ESP_LOGD(TAG, "Calculated checksum is 0x%02x", (int)checksum);
@@ -230,7 +283,7 @@ esp_err_t unset_dormant_mode(ZH03* ZH03_inst)
     return ESP_ERR_INVALID_SIZE;
 }
 
-esp_err_t get_particulate_reading_initiative_upload_mode(ZH03* ZH03_inst, int32_t* PM_1, int32_t* PM_2_5, int32_t* PM_10)
+esp_err_t get_particulate_reading_initiative_upload_mode(ZH03* zh03_inst, int32_t* PM_1, int32_t* PM_2_5, int32_t* PM_10)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
 
@@ -238,7 +291,7 @@ esp_err_t get_particulate_reading_initiative_upload_mode(ZH03* ZH03_inst, int32_
     uint32_t checksum = 0;
     uint32_t sent_checksum = 0;
 
-    if(ZH03_inst ==NULL)
+    if(zh03_inst ==NULL)
     {
         return ESP_ERR_INVALID_ARG;
     }
@@ -247,16 +300,16 @@ esp_err_t get_particulate_reading_initiative_upload_mode(ZH03* ZH03_inst, int32_
         return ESP_ERR_INVALID_ARG;
     }
 
-    int rxBytes = uart_read_bytes(ZH03_inst->uart_port, data, RX_BUF_SIZE, timeout_ms/portTICK_RATE_MS);
-    if(rxBytes == -1)
+    int rx_bytes = uart_read_bytes(zh03_inst->uart_port, data, RX_BUF_SIZE, ZH03B_UART_TIMEOUT/portTICK_RATE_MS);
+    if(rx_bytes == -1)
     {
         return ESP_FAIL;
     }
-    if (rxBytes >= ZH03_CHECKSUM_LOW_BYTE_POS) 
+    if (rx_bytes >= ZH03_CHECKSUM_LOW_BYTE_POS) 
     {
-        ESP_LOGI(TAG, "Read %d bytes", rxBytes);
-        ESP_LOG_BUFFER_HEXDUMP(TAG, data, rxBytes, ESP_LOG_INFO);
-        for(int i=0; i < rxBytes-1; i++)
+        ESP_LOGI(TAG, "Read %d bytes", rx_bytes);
+        ESP_LOG_BUFFER_HEXDUMP(TAG, data, rx_bytes, ESP_LOG_INFO);
+        for(int i=0; i < rx_bytes-1; i++)
         {
             if(data[i] == 0x42)
             {
@@ -305,37 +358,35 @@ esp_err_t get_particulate_reading_initiative_upload_mode(ZH03* ZH03_inst, int32_
     return ESP_ERR_INVALID_SIZE;
 }
 
-esp_err_t get_particulate_reading_QA_mode(ZH03* ZH03_inst, int32_t* PM_1, int32_t* PM_2_5, int32_t* PM_10)
+esp_err_t get_particulate_reading_QA_mode(ZH03* zh03_inst, int32_t* PM_1, int32_t* PM_2_5, int32_t* PM_10)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
     uint8_t data[RX_BUF_SIZE]={0};
     uint8_t checksum = 0;
     uint8_t sent_checksum = 0;
 
-    const uint8_t QA_command[ZH03B_PACKET_LENGTH] = {0xFF, 0x01, 0x86, 0x00, 0x00, 0x00, 0x00, 0x00, 0x79};
+    int tx_bytes = uart_write_bytes(zh03_inst->uart_port, (char*)QA_command, ZH03B_PACKET_LENGTH);
 
-    int txBytes = uart_write_bytes(ZH03_inst->uart_port, (char*)QA_command, ZH03B_PACKET_LENGTH);
-
-    if(txBytes != ZH03B_PACKET_LENGTH)
+    if(tx_bytes != ZH03B_PACKET_LENGTH)
     {
-        ESP_LOGE(TAG, "'QA' command failed, command length was %d bytes, wrote %d bytes", ZH03B_PACKET_LENGTH, txBytes);
+        ESP_LOGE(TAG, "'QA' command failed, command length was %d bytes, wrote %d bytes", ZH03B_PACKET_LENGTH, tx_bytes);
         return ESP_FAIL;
     }
 
     ESP_LOGI(TAG, "Wrote all 'QA' command bytes successfully");
 
-    int rxBytes = uart_read_bytes(ZH03_inst->uart_port, data, RX_BUF_SIZE, 1000/portTICK_RATE_MS);
+    int rx_bytes = uart_read_bytes(zh03_inst->uart_port, data, RX_BUF_SIZE, 1000/portTICK_RATE_MS);
 
-    if(rxBytes == -1)
+    if(rx_bytes == -1)
     {
         ESP_LOGI(TAG, "Could not get 'QA' command response bytes from port");
         return ESP_FAIL;
     }
-    if (rxBytes >= ZH03B_PACKET_LENGTH) 
+    if (rx_bytes >= ZH03B_PACKET_LENGTH) 
     {
-        ESP_LOGI(TAG, "Read %d bytes", rxBytes);
-        ESP_LOG_BUFFER_HEXDUMP(TAG, data, rxBytes, ESP_LOG_INFO);
-        for(int i=0; i < rxBytes-1; i++)
+        ESP_LOGI(TAG, "Read %d bytes", rx_bytes);
+        ESP_LOG_BUFFER_HEXDUMP(TAG, data, rx_bytes, ESP_LOG_INFO);
+        for(int i=0; i < rx_bytes-1; i++)
         {
             if(data[i] == 0xFF)
             {
