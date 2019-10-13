@@ -1,15 +1,16 @@
 /**
- * @file ds3231.c
+ * @file i2c_ds3231.c
  *
  * ESP-IDF driver for DS3231 high precision RTC module
  *
  * Ported from esp-open-rtos
  * Copyright (C) 2015 Richard A Burton <richardaburton@gmail.com>
  * Copyright (C) 2016 Bhuvanchandra DV <bhuvanchandra.dv@gmail.com>
+ * Copyright (C) 2019 Alois Mbutura <aloismbutura@gmail.com>
  * MIT Licensed as described in the file LICENSE
  */
 
-#include "DS3231.h"
+#include "i2c_ds3231.h"
 #include "esp_err.h"
 #include "esp_log.h"
 #include "driver/i2c.h"
@@ -128,7 +129,7 @@ static inline esp_err_t ds3231_i2c_read_reg(const DS3231* ds3231_inst, uint8_t r
     return ds3231_i2c_read(ds3231_inst, &reg, 1, in_data, in_size);
 }
 
-esp_err_t ds3231_i2c_write(const DS3231* ds3231_inst, const void *out_reg, size_t out_reg_size, const void *out_data, size_t out_size)
+static esp_err_t ds3231_i2c_write(const DS3231* ds3231_inst, const void *out_reg, size_t out_reg_size, const void *out_data, size_t out_size)
 {
     if (ds3231_inst == NULL || out_data == NULL || out_size == 0)
     {
@@ -141,7 +142,9 @@ esp_err_t ds3231_i2c_write(const DS3231* ds3231_inst, const void *out_reg, size_
     i2c_master_start(cmd);
     i2c_master_write_byte(cmd, (ds3231_inst->address) << 1, true);
     if (out_reg && out_reg_size)
+    {
         i2c_master_write(cmd, (void *)out_reg, out_reg_size, true);
+    }
     i2c_master_write(cmd, (void *)out_data, out_size, true);
     i2c_master_stop(cmd);
     esp_err_t ret = i2c_master_cmd_begin((ds3231_inst->i2c_port), cmd, DS3231_I2C_TIMEOUT/portTICK_RATE_MS);
@@ -252,6 +255,10 @@ esp_err_t ds3231_set_alarm(DS3231* ds3231_inst, ds3231_alarm_t alarms, struct tm
 static esp_err_t ds3231_get_flag(DS3231* ds3231_inst, uint8_t addr, uint8_t mask, uint8_t *flag)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
+    if (ds3231_inst == NULL)
+    {
+        return ESP_ERR_INVALID_ARG;
+    }
 
     uint8_t data = 0;
 
@@ -276,6 +283,10 @@ static esp_err_t ds3231_get_flag(DS3231* ds3231_inst, uint8_t addr, uint8_t mask
 static esp_err_t ds3231_set_flag(DS3231* ds3231_inst, uint8_t addr, uint8_t bits, uint8_t mode)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
+    if (ds3231_inst == NULL)
+    {
+        return ESP_ERR_INVALID_ARG;
+    }
 
     uint8_t data = 0;
 

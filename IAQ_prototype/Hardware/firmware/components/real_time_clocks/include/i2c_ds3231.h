@@ -1,5 +1,5 @@
 /**
- * @file ds3231.h
+ * @file i2c_ds3231.h
  *
  * ESP-IDF driver for DS3231 high precision RTC module
  *
@@ -7,6 +7,7 @@
  * Copyright (C) 2015 Richard A Burton <richardaburton@gmail.com>
  * Copyright (C) 2016 Bhuvanchandra DV <bhuvanchandra.dv@gmail.com>
  * Copyright (C) 2018 Ruslan V. Uss <unclerus@gmail.com>
+ * Copyright (C) 2019 Alois Mbutura <aloismbutura@gmail.com>
  * MIT Licensed as described in the file LICENSE
  */
 
