@@ -10,7 +10,7 @@
  */
 /**********************************************************************************************************************************/
 #define RX_BUF_SIZE 256
-#define ZH03B_UART_TIMEOUT 1500;
+#define ZH03_UART_TIMEOUT 1500;
 
 /**********************************************************************************************************************************/
 /**
@@ -83,7 +83,7 @@ static const uint8_t start_of_response_frame = 0xff;
  */
 /**********************************************************************************************************************************/
 static const uint8_t measurement_query_response_id = 0x86;
-static const uint8_t dormancy_state_change_response_id = 0xA7;
+static const uint8_t dormancy_state_change_response_id = 0xa7;
 /**********************************************************************************************************************************/
 /**
  * Power state change request, success identifiers
@@ -178,7 +178,7 @@ static esp_err_t zh03_uart_read(const ZH03* zh03_inst, uint8_t* in_data, int* in
         return ESP_ERR_INVALID_ARG;
     }
 
-    int rx_bytes = uart_read_bytes(zh03_inst->uart_port, in_data, RX_BUF_SIZE, ZH03B_UART_TIMEOUT/portTICK_RATE_MS);
+    int rx_bytes = uart_read_bytes(zh03_inst->uart_port, in_data, RX_BUF_SIZE, ZH03_UART_TIMEOUT/portTICK_RATE_MS);
     if(rx_bytes == -1)
     {
         ESP_LOGE(TAG, "Failed to read data from device");
@@ -335,12 +335,12 @@ static esp_err_t zh03_get_cmd_response(const uint8_t* in_data, int rx_bytes, zh0
     return ESP_ERR_INVALID_SIZE;
 }
 
-static inline esp_err_t get_queried_measurement(const void* in_data, int rx_bytes, int32_t* PM1, int32_t* PM2_5, int32_t* PM10)
+static inline esp_err_t get_queried_measurement(const uint8_t* in_data, int rx_bytes, int32_t* PM1, int32_t* PM2_5, int32_t* PM10)
 {
     return zh03_get_cmd_response(in_data, rx_bytes, ZH03_CMD_QA_MODE, PM1, PM2_5, PM10);
 }
 
-static inline esp_err_t get_power_state_change_response(const void* in_data, int rx_bytes)
+static inline esp_err_t get_power_state_change_response(const uint8_t* in_data, int rx_bytes)
 {
     return zh03_get_cmd_response(in_data, rx_bytes, ZH03_CMD_DORMANCY_STATE_CHANGE, NULL, NULL, NULL);
 }
@@ -445,7 +445,7 @@ esp_err_t get_QA_measurement(const ZH03* zh03_inst, int32_t* PM1, int32_t* PM2_5
         return ret;
     }
 
-    ESP_LOGI(TAG, "Sending command unsuccessful");
+    ESP_LOGI(TAG, "Successfully sent command");
     ret = zh03_uart_read(zh03_inst, data, &rx_bytes);
     if(ret != ESP_OK)
     {
