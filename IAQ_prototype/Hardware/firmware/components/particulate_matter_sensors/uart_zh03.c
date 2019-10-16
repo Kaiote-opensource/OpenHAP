@@ -4,58 +4,107 @@
 #include "esp_log.h"
 #include "uart_zh03.h"
 
+/**********************************************************************************************************************************/
 /**
- * Particulate measurement frame layout (initiative upload mode)
+ * Uart transceiver operational parameters
  */
-#define ZH03_START_BYTE_2_POS           2
-#define ZH03_FRAME_LENGTH_POS           4
-#define ZH03_PM_1_HIGH_BYTE_POS         11
-#define ZH03_PM_1_LOW_BYTE_POS          12
-#define ZH03_PM_2_5_HIGH_BYTE_POS       13
-#define ZH03_PM_2_5_LOW_BYTE_POS        14
-#define ZH03_PM_10_HIGH_BYTE_POS        15
-#define ZH03_PM_10_LOW_BYTE_POS         16
-#define ZH03_CHECKSUM_HIGH_BYTE_POS     23
-#define ZH03_CHECKSUM_LOW_BYTE_POS      24
-
-#include 
-
-/**
- * Asynchronous UART buffer length, width is default 1 byte
- */
+/**********************************************************************************************************************************/
 #define RX_BUF_SIZE 256
+#define ZH03B_UART_TIMEOUT 1500;
 
+/**********************************************************************************************************************************/
+/**
+ * Frame lengths of generalised frame types (Command&response frames and initiative upload frames)
+ */
+/**********************************************************************************************************************************/
 #define ZH03_CMD_FRAME_LENGTH 9
+#define ZH03_INITIATIVE_MEASUREMENT_FRAME_LENGTH 23
+
+/**********************************************************************************************************************************/
+/**
+ * Generalised measurement query & command response frame layout byte[0-8]
+ */
+/**********************************************************************************************************************************/
+#define ZH03_CMD_START_BYTE_POS        0
+#define ZH03_CMD_ID_POS                1
+#define ZH03_CMD_RETURN                2
+#define ZH03_QA_PM2_5_HIGH_BYTE        2
+#define ZH03_QA_PM2_5_LOW_BYTE         3
+#define ZH03_QA_PM10_HIGH_BYTE         4
+#define ZH03_QA_PM10_LOW_BYTE          5
+#define ZH03_QA_PM1_HIGH_BYTE          6
+#define ZH03_QA_PM1_LOW_BYTE           7
+#define ZH03_QA_CMD_CHECKSUM           8
+/**********************************************************************************************************************************/
+/**
+ * Initiative upload measurement frame layout byte[0-23]
+ */
+/**********************************************************************************************************************************/
+#define ZH03_UPLOAD_START_BYTE_POS             0
+#define ZH03_UPLOAD_START_BYTE_2_POS           1
+#define ZH03_UPLOAD_FRAME_LENGTH_POS           3
+#define ZH03_UPLOAD_PM_1_HIGH_BYTE_POS         10
+#define ZH03_UPLOAD_PM_1_LOW_BYTE_POS          11
+#define ZH03_UPLOAD_PM_2_5_HIGH_BYTE_POS       12
+#define ZH03_UPLOAD_PM_2_5_LOW_BYTE_POS        13
+#define ZH03_UPLOAD_PM_10_HIGH_BYTE_POS        14
+#define ZH03_UPLOAD_PM_10_LOW_BYTE_POS         15
+#define ZH03_UPLOAD_CHECKSUM_HIGH_BYTE_POS     22
+#define ZH03_UPLOAD_CHECKSUM_LOW_BYTE_POS      23
+
 
 static const char* TAG = "PM_SENSOR_ZH03";
-/**
- * As the ZH03 sends 1 measurement frame per second asynchronously in initiative upload, we adjust this timeout to 1.5 the interval
- */
-static const int ZH03B_UART_TIMEOUT = 1500;
 
+/**********************************************************************************************************************************/
 /**
- * Response start of frame identifier
+ * ZH03 command frames types and structure
  */
+/**********************************************************************************************************************************/
+static const uint8_t set_QA_mode_cmd_frame[ZH03_CMD_FRAME_LENGTH] = {0xff, 0x01, 0x78, 0x41, 0x00, 0x00, 0x00, 0x00, 0x46};
+static const uint8_t set_initiative_upload_mode_cmd_frame[ZH03_CMD_FRAME_LENGTH] = {0xff, 0x01, 0x78, 0x40, 0x00, 0x00, 0x00, 0x00, 0x47};
+static const uint8_t set_dormant_mode_cmd_frame[ZH03_CMD_FRAME_LENGTH] = {0xff, 0x01, 0xa7, 0x01, 0x00, 0x00, 0x00, 0x00, 0x57};
+static const uint8_t unset_dormant_mode_cmd_frame[ZH03_CMD_FRAME_LENGTH] = {0xff, 0x01, 0xa7, 0x00, 0x00, 0x00, 0x00, 0x00, 0x58};
+static const uint8_t measurement_query_frame[ZH03_CMD_FRAME_LENGTH] = {0xff, 0x01, 0x86, 0x00, 0x00, 0x00, 0x00, 0x00, 0x79};
+
+/**********************************************************************************************************************************/
+/**
+ * ZH03 response frames
+ */
+/**********************************************************************************************************************************/
+/**********************************************************************************************************************************/
+/**
+ * Response frame identifier
+ */
+/**********************************************************************************************************************************/
 static const uint8_t start_of_response_frame = 0xff;
+/**********************************************************************************************************************************/
 /**
  * Response type identifiers
  */
+/**********************************************************************************************************************************/
 static const uint8_t measurement_query_response_id = 0x86;
 static const uint8_t dormancy_state_change_response_id = 0xA7;
+/**********************************************************************************************************************************/
 /**
- * Dormancy state change command responses
+ * Power state change request, success identifiers
  */
+/**********************************************************************************************************************************/
 static const uint8_t dormancy_state_change_success = 0x01;
 static const uint8_t dormancy_state_change_fail = 0x00;
 
+
+/**********************************************************************************************************************************/
 /**
- * ZH03 command frames
+ * Initiative upload frames
  */
-static const uint8_t set_QA_mode_cmd_frame[ZH03_CMD_FRAME_LENGTH] = {0xFF, 0x01, 0x78, 0x41, 0x00, 0x00, 0x00, 0x00, 0x46};
-static const uint8_t set_initiative_upload_mode_cmd_frame[ZH03_CMD_FRAME_LENGTH] = {0xFF, 0x01, 0x78, 0x40, 0x00, 0x00, 0x00, 0x00, 0x47};
-static const uint8_t set_dormant_mode_cmd_frame[ZH03_CMD_FRAME_LENGTH] = {0xFF, 0x01, 0xA7, 0x01, 0x00, 0x00, 0x00, 0x00, 0x57};
-static const uint8_t unset_dormant_mode_cmd_frame[ZH03_CMD_FRAME_LENGTH] = {0xFF, 0x01, 0xA7, 0x00, 0x00, 0x00, 0x00, 0x00, 0x58};
-static const uint8_t measurement_query_frame[ZH03_CMD_FRAME_LENGTH] = {0xFF, 0x01, 0x86, 0x00, 0x00, 0x00, 0x00, 0x00, 0x79};
+/**********************************************************************************************************************************/
+/**********************************************************************************************************************************/
+/**
+ * Start of initiative upload frame identifier
+ */
+/**********************************************************************************************************************************/
+static const uint8_t start_of_response_frame_byte_1 = 0x42;
+static const uint8_t start_of_response_frame_byte_2 = 0x4d;
 
 enum
 {
@@ -114,14 +163,14 @@ static esp_err_t zh03_uart_write(const ZH03* zh03_inst, const void* out_data, si
     int tx_bytes = uart_write_bytes(zh03_inst->uart_port, (char*)out_data, out_size);
     if(tx_bytes != out_size)
     {
-        ESP_LOGE(TAG, "Writing to zh03 failed, length is %d bytes, wrote %d bytes", out_size, tx_bytes);
+        ESP_LOGE(TAG, "Writing to device failed, length is %d bytes, wrote %d bytes", out_size, tx_bytes);
         return ESP_FAIL;
     }
-    ESP_LOGI(TAG, "Wrote all bytes to zh03 successfully");       
+    ESP_LOGI(TAG, "Wrote all bytes to device successfully");       
     return ret;    
 }
 
-static esp_err_t zh03_uart_read(const ZH03* zh03_inst, void* in_data, int* in_size)
+static esp_err_t zh03_uart_read(const ZH03* zh03_inst, uint8_t* in_data, int* in_size)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);  
     if(zh03_inst == NULL || in_data == NULL || in_size == NULL)
@@ -129,7 +178,7 @@ static esp_err_t zh03_uart_read(const ZH03* zh03_inst, void* in_data, int* in_si
         return ESP_ERR_INVALID_ARG;
     }
 
-    int rx_bytes = uart_read_bytes(zh03_inst->uart_port, (uint8_t*)in_data, RX_BUF_SIZE, ZH03B_UART_TIMEOUT/portTICK_RATE_MS);
+    int rx_bytes = uart_read_bytes(zh03_inst->uart_port, in_data, RX_BUF_SIZE, ZH03B_UART_TIMEOUT/portTICK_RATE_MS);
     if(rx_bytes == -1)
     {
         ESP_LOGE(TAG, "Failed to read data from device");
@@ -142,7 +191,7 @@ static esp_err_t zh03_uart_read(const ZH03* zh03_inst, void* in_data, int* in_si
     return ESP_OK;
 }
 
-static esp_err_t zh03_verify_checksum(uint8_t* data, int length)
+static esp_err_t zh03_verify_checksum_8(uint8_t* data, int length)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
     if(data == NULL || length <= 0)
@@ -173,7 +222,38 @@ static esp_err_t zh03_verify_checksum(uint8_t* data, int length)
     return ESP_OK;   
 }
 
-static esp_err_t zh03_get_cmd_response(const void* in_data, int rx_bytes, zh03_command_t command_type_sent)
+static esp_err_t zh03_verify_checksum_16(uint8_t* data, int length)
+{
+    ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
+    if(data == NULL || length <= 0)
+    {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    uint8_t calculated_checksum= 0;
+    uint8_t frame_checksum = 0;
+
+    for(int j = 0; j < length; j++)
+    {
+        calculated_checksum += data[j];
+    }
+
+    calculated_checksum = ~calculated_checksum;
+    calculated_checksum += 1;
+    ESP_LOGD(TAG, "Calculated checksum is 0x%02x", (int)calculated_checksum);
+    sent_checksum = data[i+(ZH03_CMD_FRAME_LENGTH-1)];
+    ESP_LOGD(TAG, "Frame checksum is 0x%02x", (int)frame_checksum);
+    if(checksum != frame_checksum)
+    {
+        ESP_LOGE(TAG, "Checksum failure!");
+        return ESP_FAIL;
+    }
+
+    ESP_LOGI(TAG, "Checksum success!"); 
+    return ESP_OK;   
+}
+
+static esp_err_t zh03_get_cmd_response(const uint8_t* in_data, int rx_bytes, zh03_command_t command_type_sent, int32_t* PM1, int32_t* PM2_5, int32_t* PM10)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);  
     if(in_data == NULL || in_size == NULL)
@@ -181,33 +261,42 @@ static esp_err_t zh03_get_cmd_response(const void* in_data, int rx_bytes, zh03_c
         return ESP_ERR_INVALID_ARG;
     }
 
-    if (rx_bytes >= ZH03_CMD_FRAME_LENGTH) 
+    uint8_t* frame_data = NULL;
+
+    if (rx_bytes >= ZH03_CMD_FRAME_LENGTH)
     {
         for(int i=0; i < rx_bytes-1; i++)
         {
-            if(data[i] == start_of_response_frame)
+            if(in_data[i] == start_of_response_frame)
             {
-                if(command_type_sent == ZH03_CMD_DORMANCY_STATE_CHANGE && data[i+1] == dormancy_state_change_response_id)
+                frame_data = &(in_data[i]);
+                if(command_type_sent == ZH03_CMD_DORMANCY_STATE_CHANGE && frame_data[ZH03_CMD_ID_POS] == dormancy_state_change_response_id)
                 {
                     ESP_LOGD(TAG, "Successfully found response to dormancy state change command");
-                    esp_err_t ret = zh03_verify_checksum(data[i+1], ZH03_CMD_FRAME_LENGTH-1);
+                    esp_err_t ret = zh03_verify_checksum(frame_data[ZH03_CMD_ID_POS], ZH03_CMD_FRAME_LENGTH-1);
                     if(ret != ESP_OK)
                     {
                         continue;
                     }
 
-                    if(data[i+2] == dormancy_state_change_fail)
+                    if(frame_data[ZH03_CMD_RETURN] == dormancy_state_change_fail)
                     {
-                        ESP_LOGI(TAG, "Dormancy state change command returned failure from device!");
+                        ESP_LOGI(TAG, "Device executed power state change command unsuccessfully");
                         return ESP_FAIL;                        
                     }
-                    ESP_LOGI(TAG, "Dormancy state change command returned success from device!");
+
+                    ESP_LOGI(TAG, "Device executed power state change command successfully");
                     return ESP_OK;
                 }
-                else if(command_type_sent == ZH03_CMD_QA_MODE && data[i+1] == measurement_query_response_id)
+                else if(command_type_sent == ZH03_CMD_QA_MODE && frame_data[ZH03_CMD_ID_POS] == measurement_query_response_id)
                 {
+                    if(PM1 == NULL && PM2_5 == NULL && PM10 == NULL)
+                    {
+                        return ESP_ERR_INVALID_ARG;
+                    }
+
                     ESP_LOGD(TAG, "Successfully found response to measurement query");
-                    esp_err_t ret = zh03_verify_checksum(data[i+1], ZH03_CMD_FRAME_LENGTH-1);
+                    esp_err_t ret = zh03_verify_checksum(frame_data[ZH03_CMD_ID_POS], ZH03_CMD_FRAME_LENGTH-1);
                     if(ret != ESP_OK)
                     {
                         continue;
@@ -218,19 +307,19 @@ static esp_err_t zh03_get_cmd_response(const void* in_data, int rx_bytes, zh03_c
                     */
                     if(PM_1 != NULL)
                     {
-                        *PM_1 = data[i+3] + (256*data[i+2]);
+                        *PM1 = (256*(frame_data[ZH03_QA_PM1_HIGH_BYTE])) + frame_data[ZH03_QA_PM1_LOW_BYTE];
                         ESP_LOGD(TAG, "PM 1 value is %d ug/m3", (int)*PM_1);
                     }
                     if(PM_2_5 != NULL)
                     {
-                        *PM_2_5 = data[i+7] + (256*data[i+6]);
+                        *PM2_5 = (256*(frame_data[ZH03_QA_PM2_5_HIGH_BYTE])) + frame_data[ZH03_QA_PM2_5_LOW_BYTE];
                         ESP_LOGD(TAG, "PM 2.5 value is %d ug/m3", (int)*PM_2_5);
                     }
                     if(PM_10 != NULL)
                     {
-                        *PM_10 = data[i+5] + (256*data[i+4]);
+                        *PM10 = (256*(frame_data[ZH03_QA_PM10_HIGH_BYTE])) + frame_data[ZH03_QA_PM10_LOW_BYTE];
                         ESP_LOGD(TAG, "PM 10 value is %d ug/m3", (int)*PM_10);
-                    } 
+                    }
                     return ESP_OK;
                 }
                 else
@@ -240,9 +329,20 @@ static esp_err_t zh03_get_cmd_response(const void* in_data, int rx_bytes, zh03_c
                 }
             }
         }
+        ESP_LOGW(TAG, "Valid response frame not found in buffer!");
     }
-    ESP_LOGE(TAG, "Buffered UART bytes are less than the expected %d byte frame length", ZH03_CMD_FRAME_LENGTH);
+    ESP_LOGE(TAG, "Bytes in UART buffer are less than the expected %d byte frame length, try increasing the wait time", ZH03_CMD_FRAME_LENGTH);
     return ESP_ERR_INVALID_SIZE;
+}
+
+static inline esp_err_t get_queried_measurement(const void* in_data, int rx_bytes, int32_t* PM1, int32_t* PM2_5, int32_t* PM10)
+{
+    return zh03_get_cmd_response(in_data, rx_bytes, ZH03_CMD_QA_MODE, PM1, PM2_5, PM10);
+}
+
+static inline esp_err_t get_power_state_change_response(const void* in_data, int rx_bytes)
+{
+    return zh03_get_cmd_response(in_data, rx_bytes, ZH03_CMD_DORMANCY_STATE_CHANGE, NULL, NULL, NULL);
 }
 
 /**
@@ -262,20 +362,20 @@ esp_err_t zh03_sleep(const ZH03* zh03_inst)
     esp_err_t ret = zh03_uart_write(zh03_inst, set_dormant_mode_cmd_frame, ZH03_CMD_FRAME_LENGTH);
     if(ret != ESP_OK)
     {
-        //Do something? Maybe pass a function pointer to act as the exception handler from user code?
-        ESP_LOGE(TAG, "[%s] command not transmitted", command);
+        ESP_LOGE(TAG, "Sending command unsuccessful");
+        return ret;
     }
 
-    ESP_LOGI(TAG, "[%s] command transmitted", command_name);
+    ESP_LOGI(TAG, "Successfully sent command");
     ret = zh03_uart_read(zh03_inst, data, &rx_bytes)
     if(ret != ESP_OK)
     {
-        //Do something? Maybe pass a function pointer to act as the exception handler from user code?   
-        ESP_LOGE(TAG, "[%s]-response not receive", command);     
+        ESP_LOGE(TAG, "Did not receive data from device");
+        return ret;
     }
 
-    ESP_LOGI(TAG, "[%s]-response received", command_name);
-    return zh03_uart_parse(data, &rx_bytes);
+    ESP_LOGI(TAG, "Received data from device");
+    return get_power_state_change_response(data, &rx_bytes);
 }
 
 esp_err_t zh03_wake(const ZH03* zh03_inst)
@@ -286,28 +386,26 @@ esp_err_t zh03_wake(const ZH03* zh03_inst)
         return ESP_ERR_INVALID_ARG;
     }
 
-    char* command = "ZH03-WAKE";
-
     uint8_t data[RX_BUF_SIZE]={0};
     int rx_bytes = 0;
 
     esp_err_t ret = zh03_uart_write(zh03_inst, unset_dormant_mode_cmd_frame, ZH03_CMD_FRAME_LENGTH);
     if(ret != ESP_OK)
     {
-        ESP_LOGE(TAG, "[%s] command not transmitted", command);
-        return ESP_FAIL;
+        ESP_LOGE(TAG, "Sending command unsuccessful");
+        return ret;
     }
 
-    ESP_LOGI(TAG, "[%s] command transmitted", command_name);
+    ESP_LOGI(TAG, "Successfully sent command");
     ret = zh03_uart_read(zh03_inst, data, &rx_bytes);
     if(ret != ESP_OK)
     {
-        //Do something? Maybe pass a function pointer to act as the exception handler from user code?   
-        ESP_LOGE(TAG, "[%s]-response not receive", command);     
+        ESP_LOGE(TAG, "Did not receive data from device");
+        return ret;
     }
 
-    ESP_LOGI(TAG, "[%s]-response received", command_name);
-    return zh03_uart_parse(data, &rx_bytes);
+    ESP_LOGI(TAG, "Received data from device");
+    return get_power_state_change_response(data, &rx_bytes);
 }
 
 /**
@@ -321,11 +419,10 @@ esp_err_t set_QA_mode(const ZH03* zh03_inst)
         return ESP_ERR_INVALID_ARG;
     }
 
-    esp_err_t ret = zh03_uart_write(zh03_inst, set_QA_mode_cmd_frame, ZH03_CMD_FRAME_LENGTH);
-    return ret;
+    return zh03_uart_write(zh03_inst, set_QA_mode_cmd_frame, ZH03_CMD_FRAME_LENGTH);
 }
 
-esp_err_t get_QA_measurement(const ZH03* zh03_inst, int32_t* PM_1, int32_t* PM_2_5, int32_t* PM_10)
+esp_err_t get_QA_measurement(const ZH03* zh03_inst, int32_t* PM1, int32_t* PM2_5, int32_t* PM10)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
     if(zh03_inst ==NULL)
@@ -333,87 +430,31 @@ esp_err_t get_QA_measurement(const ZH03* zh03_inst, int32_t* PM_1, int32_t* PM_2
         return ESP_ERR_INVALID_ARG;
     }
 
-    if(PM_1 == NULL && PM_2_5 == NULL && PM_10 == NULL)
+    if(PM1 == NULL && PM2_5 == NULL && PM10 == NULL)
     {
         return ESP_ERR_INVALID_ARG;
     }
 
-    char* command = "MEASUREMENT_QUERY";
-
     uint8_t data[RX_BUF_SIZE]={0};
-    uint8_t checksum = 0;
-    uint8_t sent_checksum = 0;
     int rx_bytes = 0;
 
     esp_err_t ret = zh03_uart_write(zh03_inst, measurement_query_frame, ZH03_CMD_FRAME_LENGTH);
     if(ret != ESP_OK)
     {
-        ESP_LOGE(TAG, "[%s] command not transmitted", command);
-        return ESP_FAIL;
+        ESP_LOGE(TAG, "Sending command unsuccessful");
+        return ret;
     }
 
-    ESP_LOGI(TAG, "[%s] command transmitted", command_name);
+    ESP_LOGI(TAG, "Sending command unsuccessful");
     ret = zh03_uart_read(zh03_inst, data, &rx_bytes);
     if(ret != ESP_OK)
     {
-        //Do something? Maybe pass a function pointer to act as the exception handler from user code?   
-        ESP_LOGE(TAG, "[%s]-response not receive", command);     
+        ESP_LOGE(TAG, "Did not receive data from device");   
+        return ret;  
     }
 
-    ESP_LOGI(TAG, "[%s]-response received", command_name);
-
-    if (rx_bytes >= ZH03_CMD_FRAME_LENGTH) 
-    {
-        ESP_LOGI(TAG, "Read %d bytes", rx_bytes);
-        ESP_LOG_BUFFER_HEXDUMP(TAG, data, rx_bytes, ESP_LOG_INFO);
-        for(int i=0; i < rx_bytes-1; i++)
-        {
-            if(data[i] == 0xFF)
-            {
-                ESP_LOGD(TAG, "Found first start of frame byte");
-                if(data[i+1] == 0x86)
-                {
-                    ESP_LOGD(TAG, "Found 'main command' byte");
-                    for(int j = 1; j < ZH03_CMD_FRAME_LENGTH-1; j++)
-                    {
-                        checksum += data[i+j];
-                    }
-                    /*Take two's complement*/
-                    checksum = ~checksum;
-                    checksum += 1;
-                    ESP_LOGD(TAG, "Calculated checksum is 0x%02x", (int)checksum);
-                    sent_checksum = data[i+(ZH03_CMD_FRAME_LENGTH-1)];
-                    ESP_LOGD(TAG, "Sent checksum is 0x%02x", (int)sent_checksum);
-                    if(checksum != sent_checksum)
-                    {
-                        ESP_LOGE(TAG, "Checksum failed!");
-                        return ESP_ERR_INVALID_CRC;
-                    }
-                    else
-                    {                    
-                        if(PM_1 != NULL)
-                        {
-                            *PM_1 = data[i+3] + (256*data[i+2]);
-                            ESP_LOGD(TAG, "PM 1 value is %d ug/m3", (int)*PM_1);
-                        }
-                        if(PM_2_5 != NULL)
-                        {
-                            *PM_2_5 = data[i+7] + (256*data[i+6]);
-                            ESP_LOGD(TAG, "PM 2.5 value is %d ug/m3", (int)*PM_2_5);
-                        }
-                        if(PM_10 != NULL)
-                        {
-                            *PM_10 = data[i+5] + (256*data[i+4]);
-                            ESP_LOGD(TAG, "PM 10 value is %d ug/m3", (int)*PM_10);
-                        }
-                        return ESP_OK;
-                    }
-                }
-            }
-        }
-    }
-    ESP_LOGE(TAG, "Bytes read are less than frame length");
-    return ESP_ERR_INVALID_SIZE;
+    ESP_LOGI(TAG, "Received data from device");
+    return get_queried_measurement(data, rx_bytes, PM1, PM2_5, PM10);
 }
 
 /**
@@ -427,11 +468,10 @@ esp_err_t set_initiative_upload_mode(const ZH03* zh03_inst)
         return ESP_ERR_INVALID_ARG;
     }
 
-    esp_err_t ret = zh03_uart_write(zh03_inst, set_initiative_upload_mode_cmd_frame, ZH03_CMD_FRAME_LENGTH);
-    return ret;
+    return zh03_uart_write(zh03_inst, set_initiative_upload_mode_cmd_frame, ZH03_CMD_FRAME_LENGTH);
 }
 
-esp_err_t get_buffered_initiative_upload_measurement(const ZH03* zh03_inst, int32_t* PM_1, int32_t* PM_2_5, int32_t* PM_10)
+esp_err_t get_buffered_initiative_upload_measurement(const ZH03* zh03_inst, int32_t* PM1, int32_t* PM2_5, int32_t* PM10)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
     if(zh03_inst ==NULL)
@@ -445,31 +485,28 @@ esp_err_t get_buffered_initiative_upload_measurement(const ZH03* zh03_inst, int3
     }
     
     uint8_t data[RX_BUF_SIZE]={0};
-    uint32_t checksum = 0;
-    uint32_t sent_checksum = 0;
     int rx_bytes = 0;
 
     esp_err_t ret = zh03_uart_read(zh03_inst, data, &rx_bytes);
     if(ret != ESP_OK)
     {
-        //Do something? Maybe pass a function pointer to act as the exception handler from user code?   
-        ESP_LOGE(TAG, "Initiative measurement not received", command);     
+        ESP_LOGE(TAG, "Initiative measurement not received", command);
+        return ret;   
     }
 
     ESP_LOGI(TAG, "Initiative measurement received", command_name);
-    if (rx_bytes >= ZH03_CHECKSUM_LOW_BYTE_POS) 
+    if (rx_bytes >= ZH03_INITIATIVE_MEASUREMENT_FRAME_LENGTH) 
     {
-        ESP_LOGI(TAG, "Read %d bytes", rx_bytes);
-        ESP_LOG_BUFFER_HEXDUMP(TAG, data, rx_bytes, ESP_LOG_INFO);
         for(int i=0; i < rx_bytes-1; i++)
         {
-            if(data[i] == 0x42)
+            if(data[i] == start_of_response_frame_byte_1)
             {
                 ESP_LOGD(TAG, "Found first start of frame byte");
-                if(data[i+(ZH03_START_BYTE_2_POS-1)] == 0x4d)
+                if(data[i+ZH03_START_BYTE_2_POS] == start_of_response_frame_byte_2)
                 {
                     ESP_LOGD(TAG, "Found second start of frame byte");
-                    for(int j = 0; j < (data[i+(ZH03_FRAME_LENGTH_POS-1)]) + 2; j++)
+                    esp_err_t ret = zh03_verify_checksum_16(data[i+ZH03_FRAME_LENGTH_POS], ZH03_CMD_FRAME_LENGTH-2);
+                    for(int j = 0; j < () + 2; j++)
                     {
                         checksum += data[i+j];
                     }
