@@ -253,7 +253,7 @@ static esp_err_t zh03_verify_checksum_16(uint8_t* data, int length)
     return ESP_OK;   
 }
 
-static esp_err_t zh03_get_cmd_response(const uint8_t* in_data, int rx_bytes, zh03_command_t command_type_sent, int32_t* PM1, int32_t* PM2_5, int32_t* PM10)
+static esp_err_t zh03_get_cmd_response(const uint8_t* in_data, int rx_bytes, zh03_command_t command_type_sent, uint16_t* PM1, uint16_t* PM2_5, uint16_t* PM10)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);  
     if(in_data == NULL || in_size == NULL)
@@ -265,77 +265,90 @@ static esp_err_t zh03_get_cmd_response(const uint8_t* in_data, int rx_bytes, zh0
 
     if (rx_bytes >= ZH03_CMD_FRAME_LENGTH)
     {
-        for(int i=0; i < rx_bytes-1; i++)
+        for(int i=0; i < rx_bytes; i++)
         {
-            if(in_data[i] == start_of_response_frame)
+            if(i <= (rx_bytes - ZH03_CMD_FRAME_LENGTH))
             {
-                frame_data = &(in_data[i]);
-                if(command_type_sent == ZH03_CMD_DORMANCY_STATE_CHANGE && frame_data[ZH03_CMD_ID_POS] == dormancy_state_change_response_id)
+                if(in_data[i] == start_of_response_frame)
                 {
-                    ESP_LOGD(TAG, "Successfully found response to dormancy state change command");
-                    esp_err_t ret = zh03_verify_checksum(frame_data[ZH03_CMD_ID_POS], ZH03_CMD_FRAME_LENGTH-1);
-                    if(ret != ESP_OK)
+                    frame_data = &(in_data[i]);
+
+                    if(command_type_sent == ZH03_CMD_DORMANCY_STATE_CHANGE && frame_data[ZH03_CMD_ID_POS] == dormancy_state_change_response_id)
                     {
+                        ESP_LOGD(TAG, "Successfully found response to dormancy state change command");
+                        esp_err_t ret = zh03_verify_checksum(frame_data[ZH03_CMD_ID_POS], ZH03_CMD_FRAME_LENGTH-1);
+                        if(ret != ESP_OK)
+                        {
+                            continue;
+                        }
+
+                        if(frame_data[ZH03_CMD_RETURN] == dormancy_state_change_fail)
+                        {
+                            ESP_LOGI(TAG, "Device executed power state change command unsuccessfully");
+                            return ESP_FAIL;                        
+                        }
+
+                        ESP_LOGI(TAG, "Device executed power state change command successfully");
+                        return ESP_OK;
+                    }
+                    else if(command_type_sent == ZH03_CMD_QA_MODE && frame_data[ZH03_CMD_ID_POS] == measurement_query_response_id)
+                    {
+                        if(PM1 == NULL && PM2_5 == NULL && PM10 == NULL)
+                        {
+                            return ESP_ERR_INVALID_ARG;
+                        }
+
+                        ESP_LOGD(TAG, "Successfully found response to measurement query");
+                        esp_err_t ret = zh03_verify_checksum(frame_data[ZH03_CMD_ID_POS], ZH03_CMD_FRAME_LENGTH-1);
+                        if(ret != ESP_OK)
+                        {
+                            continue;
+                        }
+
+                        /**
+                        * Get queried measurement data
+                        */
+                        if(PM_1 != NULL)
+                        {
+                            *PM1 = (256*(frame_data[ZH03_QA_PM1_HIGH_BYTE])) + frame_data[ZH03_QA_PM1_LOW_BYTE];
+                            ESP_LOGD(TAG, "PM 1 value is %d ug/m3", (int)*PM_1);
+                        }
+                        if(PM_2_5 != NULL)
+                        {
+                            *PM2_5 = (256*(frame_data[ZH03_QA_PM2_5_HIGH_BYTE])) + frame_data[ZH03_QA_PM2_5_LOW_BYTE];
+                            ESP_LOGD(TAG, "PM 2.5 value is %d ug/m3", (int)*PM_2_5);
+                        }
+                        if(PM_10 != NULL)
+                        {
+                            *PM10 = (256*(frame_data[ZH03_QA_PM10_HIGH_BYTE])) + frame_data[ZH03_QA_PM10_LOW_BYTE];
+                            ESP_LOGD(TAG, "PM 10 value is %d ug/m3", (int)*PM_10);
+                        }
+                        return ESP_OK;
+                    }
+                    else
+                    {
+                        ESP_LOGD(TAG, "Found other response frame type...continuing buffer scan!");
                         continue;
                     }
-
-                    if(frame_data[ZH03_CMD_RETURN] == dormancy_state_change_fail)
-                    {
-                        ESP_LOGI(TAG, "Device executed power state change command unsuccessfully");
-                        return ESP_FAIL;                        
-                    }
-
-                    ESP_LOGI(TAG, "Device executed power state change command successfully");
-                    return ESP_OK;
-                }
-                else if(command_type_sent == ZH03_CMD_QA_MODE && frame_data[ZH03_CMD_ID_POS] == measurement_query_response_id)
-                {
-                    if(PM1 == NULL && PM2_5 == NULL && PM10 == NULL)
-                    {
-                        return ESP_ERR_INVALID_ARG;
-                    }
-
-                    ESP_LOGD(TAG, "Successfully found response to measurement query");
-                    esp_err_t ret = zh03_verify_checksum(frame_data[ZH03_CMD_ID_POS], ZH03_CMD_FRAME_LENGTH-1);
-                    if(ret != ESP_OK)
-                    {
-                        continue;
-                    }
-
-                    /**
-                    * Get queried measurement data
-                    */
-                    if(PM_1 != NULL)
-                    {
-                        *PM1 = (256*(frame_data[ZH03_QA_PM1_HIGH_BYTE])) + frame_data[ZH03_QA_PM1_LOW_BYTE];
-                        ESP_LOGD(TAG, "PM 1 value is %d ug/m3", (int)*PM_1);
-                    }
-                    if(PM_2_5 != NULL)
-                    {
-                        *PM2_5 = (256*(frame_data[ZH03_QA_PM2_5_HIGH_BYTE])) + frame_data[ZH03_QA_PM2_5_LOW_BYTE];
-                        ESP_LOGD(TAG, "PM 2.5 value is %d ug/m3", (int)*PM_2_5);
-                    }
-                    if(PM_10 != NULL)
-                    {
-                        *PM10 = (256*(frame_data[ZH03_QA_PM10_HIGH_BYTE])) + frame_data[ZH03_QA_PM10_LOW_BYTE];
-                        ESP_LOGD(TAG, "PM 10 value is %d ug/m3", (int)*PM_10);
-                    }
-                    return ESP_OK;
-                }
-                else
-                {
-                    ESP_LOGD(TAG, "Found other response frame type...continuing buffer scan!");
-                    continue;
                 }
             }
+            else
+            {
+                /**
+                * Stop the loop to avoid reading past buffer boundaries
+                */ 
+                break;
+            }
+            
         }
-        ESP_LOGW(TAG, "Valid response frame not found in buffer!");
+        ESP_LOGE(TAG, "Valid response frame not found in buffer!");
+        return ESP_FAIL;
     }
-    ESP_LOGE(TAG, "Bytes in UART buffer are less than the expected %d byte frame length, try increasing the wait time", ZH03_CMD_FRAME_LENGTH);
+    ESP_LOGE(TAG, "Bytes in UART buffer are less than the expected "#ZH03_CMD_FRAME_LENGTH" byte frame length, try increasing the wait time");
     return ESP_ERR_INVALID_SIZE;
 }
 
-static inline esp_err_t get_queried_measurement(const uint8_t* in_data, int rx_bytes, int32_t* PM1, int32_t* PM2_5, int32_t* PM10)
+static inline esp_err_t get_queried_measurement(const uint8_t* in_data, int rx_bytes, uint16_t* PM1, uint16_t* PM2_5, uint16_t* PM10)
 {
     return zh03_get_cmd_response(in_data, rx_bytes, ZH03_CMD_QA_MODE, PM1, PM2_5, PM10);
 }
@@ -422,7 +435,7 @@ esp_err_t set_QA_mode(const ZH03* zh03_inst)
     return zh03_uart_write(zh03_inst, set_QA_mode_cmd_frame, ZH03_CMD_FRAME_LENGTH);
 }
 
-esp_err_t get_QA_measurement(const ZH03* zh03_inst, int32_t* PM1, int32_t* PM2_5, int32_t* PM10)
+esp_err_t get_QA_measurement(const ZH03* zh03_inst, uint16_t* PM1, uint16_t* PM2_5, uint16_t* PM10)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
     if(zh03_inst ==NULL)
@@ -471,7 +484,7 @@ esp_err_t set_initiative_upload_mode(const ZH03* zh03_inst)
     return zh03_uart_write(zh03_inst, set_initiative_upload_mode_cmd_frame, ZH03_CMD_FRAME_LENGTH);
 }
 
-esp_err_t get_buffered_initiative_upload_measurement(const ZH03* zh03_inst, int32_t* PM1, int32_t* PM2_5, int32_t* PM10)
+esp_err_t get_buffered_initiative_upload_measurement(const ZH03* zh03_inst, uint16_t* PM1, uint16_t* PM2_5, uint16_t* PM10)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
     if(zh03_inst ==NULL)
