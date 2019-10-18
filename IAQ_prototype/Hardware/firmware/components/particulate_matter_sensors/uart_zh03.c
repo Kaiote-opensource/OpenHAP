@@ -358,7 +358,7 @@ static esp_err_t zh03_get_cmd_response(const uint8_t* in_data, int rx_bytes, zh0
         ESP_LOGE(TAG, "Valid response frame not found in buffer!");
         return ESP_ERR_NOT_FOUND;
     }
-    ESP_LOGE(TAG, "Bytes in UART buffer are less than the expected "#ZH03_CMD_FRAME_LENGTH" byte frame length, try increasing the wait time");
+    ESP_LOGE(TAG, "Bytes read are less than frame length");
     return ESP_ERR_INVALID_SIZE;
 }
 
@@ -557,6 +557,13 @@ esp_err_t get_buffered_initiative_upload_measurement(const ZH03* zh03_inst, uint
                     }
 
                 }
+            }
+            else
+            {
+                /**
+                * Stop the loop to avoid reading past buffer boundaries
+                */ 
+                break;
             }
         }
         ESP_LOGE(TAG, "Valid response frame not found in buffer!");
