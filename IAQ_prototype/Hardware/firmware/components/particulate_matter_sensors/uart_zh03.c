@@ -1,5 +1,3 @@
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 #include "esp_err.h"
 #include "esp_log.h"
 #include "uart_zh03.h"
@@ -250,7 +248,10 @@ static esp_err_t zh03_verify_checksum(zh03_data_t data_type, uint8_t* data, int 
             calculated_checksum += data[i];
         }
 
-        calculated_checksum = calculated_checksum%0xffff;
+        /**
+        * Calculated checksum will never go above max(uint16_t) as the number of bytes to calculate the 
+        * checksum over would need to be (65535÷255)=257 bytes long which is far greater than the current.
+        */
         ESP_LOGD(TAG, "Calculated checksum is 0x%04x", (int)calculated_checksum);
         frame_checksum = conv_int_8_16(data[ZH03_CHECKSUM_HIGH_BYTE_POS], data[ZH03_CHECKSUM_LOW_BYTE_POS]);
         ESP_LOGD(TAG, "Frame checksum is 0x%04x", (int)frame_checksum);  
