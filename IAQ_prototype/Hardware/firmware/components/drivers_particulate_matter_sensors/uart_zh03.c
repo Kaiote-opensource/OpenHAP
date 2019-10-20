@@ -1,4 +1,3 @@
-#include "esp_err.h"
 #include "esp_log.h"
 #include "uart_zh03.h"
 
@@ -49,6 +48,20 @@
 #define ZH03_UPLOAD_PM10_LOW_BYTE_POS         15
 #define ZH03_UPLOAD_CHECKSUM_HIGH_BYTE_POS    22
 #define ZH03_UPLOAD_CHECKSUM_LOW_BYTE_POS     23
+
+enum
+{
+    ZH03_CMD_DORMANCY_STATE_CHANGE = 0,
+    ZH03_CMD_QA_MODE,
+    ZH03_MAX =255
+} zh03_command_t;
+
+enum
+{
+    ZH03_INITIATIVE_MEASUREMENT = 0,
+    ZH03_CMD_RESPONSE,
+    ZH03_MAX =255
+} zh03_data_t;
 
 
 static const char* TAG = "PM_SENSOR_ZH03";
@@ -103,20 +116,6 @@ static const uint8_t dormancy_state_change_fail = 0x00;
 /**********************************************************************************************************************************/
 static const uint8_t start_of_response_frame_byte_1 = 0x42;
 static const uint8_t start_of_response_frame_byte_2 = 0x4d;
-
-enum
-{
-    ZH03_CMD_DORMANCY_STATE_CHANGE = 0,
-    ZH03_CMD_QA_MODE,
-    ZH03_MAX =255
-} zh03_command_t;
-
-enum
-{
-    ZH03_INITIATIVE_MEASUREMENT = 0,
-    ZH03_CMD_RESPONSE,
-    ZH03_MAX =255
-} zh03_data_t;
 
 esp_err_t zh03_init(ZH03* zh03_inst, uart_port_t uart_num, int txd_pin, int rxd_pin)
 {
@@ -201,7 +200,7 @@ static esp_err_t zh03_uart_read(const ZH03* zh03_inst, uint8_t* in_data, int* in
     }
 
     ESP_LOGD(TAG, "Read %d bytes from device", rx_bytes);
-    ESP_LOG_BUFFER_HEXDUMP(TAG, in_data, rx_bytes, ESP_LOG_DEBUG);
+    ESP_LOG_BUFFER_HEXDUMP(TAG, in_data, rx_bytes, ESP_LOG_VERBOSE);
     *in_size = rx_bytes;
     return ESP_OK;
 }

@@ -56,9 +56,6 @@ esp_err_t adc_init(ADC* adc_inst, adc1_channel_t adc_channel, adc_bits_width_t a
     */
     check_efuse();
 
-    ;
-    ;
-
     if(adc1_config_width(adc_width) !=ESP_OK)
     {
         ESP_LOGE(TAG, "Failed to set ADC data width");

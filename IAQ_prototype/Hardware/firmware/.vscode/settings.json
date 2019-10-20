@@ -9,6 +9,7 @@
         "chrono": "c",
         "btc_manage.h": "c",
         "array": "c",
-        "string_view": "c"
+        "string_view": "c",
+        "stddef.h": "c"
     }
 }

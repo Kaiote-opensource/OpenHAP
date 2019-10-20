@@ -16,11 +16,11 @@
 #include "driver/i2c.h"
 
 
-#define DS3231_STAT_OSCILLATOR 0x80
-#define DS3231_STAT_32KHZ      0x08
-#define DS3231_STAT_BUSY       0x04
-#define DS3231_STAT_ALARM_2    0x02
-#define DS3231_STAT_ALARM_1    0x01
+#define DS3231_STAT_OSCILLATOR    0x80
+#define DS3231_STAT_32KHZ         0x08
+#define DS3231_STAT_BUSY          0x04
+#define DS3231_STAT_ALARM_2       0x02
+#define DS3231_STAT_ALARM_1       0x01
 
 #define DS3231_CTRL_OSCILLATOR    0x80
 #define DS3231_CTRL_SQUAREWAVE_BB 0x40
@@ -29,23 +29,23 @@
 #define DS3231_CTRL_ALARM2_INT    0x02
 #define DS3231_CTRL_ALARM1_INT    0x01
 
-#define DS3231_ALARM_WDAY   0x40
-#define DS3231_ALARM_NOTSET 0x80
+#define DS3231_ALARM_WDAY         0x40
+#define DS3231_ALARM_NOTSET       0x80
 
-#define DS3231_ADDR_TIME    0x00
-#define DS3231_ADDR_ALARM1  0x07
-#define DS3231_ADDR_ALARM2  0x0b
-#define DS3231_ADDR_CONTROL 0x0e
-#define DS3231_ADDR_STATUS  0x0f
-#define DS3231_ADDR_AGING   0x10
-#define DS3231_ADDR_TEMP    0x11
+#define DS3231_ADDR_TIME          0x00
+#define DS3231_ADDR_ALARM1        0x07
+#define DS3231_ADDR_ALARM2        0x0b
+#define DS3231_ADDR_CONTROL       0x0e
+#define DS3231_ADDR_STATUS        0x0f
+#define DS3231_ADDR_AGING         0x10
+#define DS3231_ADDR_TEMP          0x11
 
-#define DS3231_12HOUR_FLAG  0x40
-#define DS3231_12HOUR_MASK  0x1f
-#define DS3231_PM_FLAG      0x20
-#define DS3231_MONTH_MASK   0x1f  
+#define DS3231_12HOUR_FLAG        0x40
+#define DS3231_12HOUR_MASK        0x1f
+#define DS3231_PM_FLAG            0x20
+#define DS3231_MONTH_MASK         0x1f  
 
-static const char* TAG = "DS3231";
+static const char* TAG = "RTC_DS3231";
 
 static const int DS3231_I2C_TIMEOUT = 1000;
 
@@ -60,12 +60,11 @@ enum
 /**
  * Helper functions
  */
-
 static uint8_t bcd2dec(uint8_t val)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
     
-    return ((val >> 4) * 10 + (val & 0x0f));
+    return (val >> 4) * 10 + (val & 0x0f);
 }
 
 static uint8_t dec2bcd(uint8_t val)
@@ -75,14 +74,14 @@ static uint8_t dec2bcd(uint8_t val)
     return ((val / 10) << 4) + (val % 10);
 }
 
-esp_err_t ds3231_init(DS3231* ds3231_inst, int address, i2c_port_t port, SemaphoreHandle_t* bus_mutex)
+esp_err_t ds3231_init(DS3231* ds3231_inst, int address, i2c_port_t port, const SemaphoreHandle_t* i2c_bus_mutex)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
     if(bus_mutex != NULL && ds3231_inst != NULL)
     {
         ds3231_inst->address = address;
         ds3231_inst->i2c_port = port;
-        ds3231_inst->i2c_bus_mutex=*bus_mutex;
+        ds3231_inst->i2c_bus_mutex = *i2c_bus_mutex;
         return ESP_OK;
     }
 
@@ -97,8 +96,6 @@ static esp_err_t ds3231_i2c_read(const DS3231* ds3231_inst, const void *out_data
         return ESP_ERR_INVALID_ARG;
     }
 
-    xSemaphoreTake(ds3231_inst->i2c_bus_mutex, portMAX_DELAY);
-
     i2c_cmd_handle_t cmd = i2c_cmd_link_create();
     if (out_data && out_size)
     {
@@ -110,11 +107,10 @@ static esp_err_t ds3231_i2c_read(const DS3231* ds3231_inst, const void *out_data
     i2c_master_write_byte(cmd, (ds3231_inst->address) << 1 | 1, true);
     i2c_master_read(cmd, in_data, in_size, I2C_MASTER_LAST_NACK);
     i2c_master_stop(cmd);
-
+    xSemaphoreTake(ds3231_inst->i2c_bus_mutex, portMAX_DELAY);
     esp_err_t ret = i2c_master_cmd_begin((ds3231_inst->i2c_port), cmd, DS3231_I2C_TIMEOUT/portTICK_RATE_MS);
-    i2c_cmd_link_delete(cmd);
-
     xSemaphoreGive(ds3231_inst->i2c_bus_mutex);
+    i2c_cmd_link_delete(cmd);
 
     if (ret != ESP_OK)
     {
@@ -135,8 +131,6 @@ static esp_err_t ds3231_i2c_write(const DS3231* ds3231_inst, const void *out_reg
     {
         return ESP_ERR_INVALID_ARG;
     }
-
-    xSemaphoreTake(ds3231_inst->i2c_bus_mutex, portMAX_DELAY);
     
     i2c_cmd_handle_t cmd = i2c_cmd_link_create();
     i2c_master_start(cmd);
@@ -147,11 +141,10 @@ static esp_err_t ds3231_i2c_write(const DS3231* ds3231_inst, const void *out_reg
     }
     i2c_master_write(cmd, (void *)out_data, out_size, true);
     i2c_master_stop(cmd);
+    xSemaphoreTake(ds3231_inst->i2c_bus_mutex, portMAX_DELAY);
     esp_err_t ret = i2c_master_cmd_begin((ds3231_inst->i2c_port), cmd, DS3231_I2C_TIMEOUT/portTICK_RATE_MS);
-    i2c_cmd_link_delete(cmd);
-
     xSemaphoreGive(ds3231_inst->i2c_bus_mutex);
-
+    i2c_cmd_link_delete(cmd);
     if (ret != ESP_OK)
     {
         ESP_LOGE(TAG, "Could not write to  ds3231 device at address [0x%02x at %d]: returned %d", (ds3231_inst->address), (ds3231_inst->i2c_port), ret);

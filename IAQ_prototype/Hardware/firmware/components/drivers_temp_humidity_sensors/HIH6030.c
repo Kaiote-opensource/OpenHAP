@@ -5,7 +5,7 @@
 #include "esp_log.h"
 #include "HIH6030.h"
 
-char* TAG = "HIH6030";
+char* TAG = "TEMP_HUM_HIH6030";
 
 #define WRITE_BIT                          I2C_MASTER_WRITE /*!< I2C master write */
 #define READ_BIT                           I2C_MASTER_READ  /*!< I2C master read */

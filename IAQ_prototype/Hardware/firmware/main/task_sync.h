@@ -2,8 +2,8 @@
 #define _TASK_SYNC_H_
 
 typedef enum {
-    acquisition_mode = 0,//!< No alarms
-    setup_mode,       //!< First alarm
+    acquisition_mode = 0,
+    setup_mode,
 } acquisition_mode_t;
 
 /*Flags set by the caller, to inform the callee task that they should set their respective bit to notify the caller task*/

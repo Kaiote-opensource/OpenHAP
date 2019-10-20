@@ -6,7 +6,7 @@
 #include <stddef.h>
 #include "esp_err.h"
 
-esp_err_t floatMaxValue(const float myArray[], const const size_t size, float* maxValuePtr, const bool exitInfNan, size_t* computeSize);
+esp_err_t floatMaxValue(const float myArray[], const size_t size, float* maxValuePtr, const bool exitInfNan, size_t* computeSize);
 
 esp_err_t intMaxValue(const int myArray[], const size_t size, int* maxValuePtr);
 

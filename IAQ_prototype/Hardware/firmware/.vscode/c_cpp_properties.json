@@ -32,10 +32,14 @@
                 "/home/alois/Documents/build_systems/espressif/esp-idf/components/esp_ringbuf/include",
                 "/home/alois/Documents/build_systems/espressif/esp-idf/components/lwip/lwip/src/include",
                 "/home/alois/Documents/build_systems/espressif/esp-idf/components/coap/libcoap/examples/lwip",
-                "/home/alois/Documents/build_systems/espressif/esp-idf/components/fatfs/src"
+                "/home/alois/Documents/build_systems/espressif/esp-idf/components/fatfs/src",
+                "/home/alois/Documents/build_systems/espressif/esp-idf/components/esp_common/include",
+                "/home/alois/Documents/build_systems/espressif/esp-idf/components/xtensa/include",
+                "/home/alois/Documents/build_systems/espressif/esp-idf/components/xtensa/esp32/include",
+                "/home/alois/Documents/build_systems/espressif/esp-idf/components/esp_rom/include"
             ],
             "defines": [],
-            "compilerPath": "/home/alois/Documents/build_systems/espressif/xtensa-esp32-elf-linux64-1.22.0-80-g6c4433a-5.2.0/xtensa-esp32-elf/bin/",
+            "compilerPath": "/home/alois/Documents/build_systems/espressif/xtensa-esp32-elf/bin/xtensa-esp32-elf-gcc",
             "cStandard": "c99",
             "cppStandard": "c++17",
             "intelliSenseMode": "clang-x64",

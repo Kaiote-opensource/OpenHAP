@@ -973,7 +973,7 @@ void infaredPageWsBroadcastTask(void *pvParameters)
         {
             ESP_LOGE(TAG, "Failed to get thermal image, returned error code %d", ret);
             /*Display Zeroed out image buffer to signify that there is an error.*/
-            memset(image_buffer, 0, 768);
+            memset(image_buffer, 0, 768*sizeof(float));
         }
         base64_camera_string = b64_encode_thermal_img(base64_camera_string, image_buffer);
         /*Take care of race conditions on bit setting by the caller task*/
