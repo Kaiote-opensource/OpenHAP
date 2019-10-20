@@ -1,5 +1,5 @@
-#ifndef _TCA9534A_H_
-#define _TCA9534A_H_
+#ifndef _I2C_TCA9534A_H_
+#define _I2C_TCA9534A_H_
 
 #include "esp_err.h"
 #include "freertos/semphr.h"
