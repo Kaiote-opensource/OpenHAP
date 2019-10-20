@@ -114,9 +114,6 @@ esp_err_t tca9534_init(TCA9534 *tca9534a_inst, int address, i2c_port_t port, gpi
     return gpio_config(&io_conf); /**< Initialise interrupt pin settings from the TCA9534*/
 }
 
-/**
- * Set all pin directions on the port - Without any regard as to their current states
- */
 esp_err_t tca9534_set_port_direction(const TCA9534 *tca9534a_inst, uint8_t port)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
@@ -137,9 +134,29 @@ esp_err_t tca9534_set_port_direction(const TCA9534 *tca9534a_inst, uint8_t port)
     return ESP_OK;
 }
 
-/**
- * Convenience function to set individual pins
- */
+esp_err_t tca9534_get_port_direction(const TCA9534 *tca9534a_inst, uint8_t* port)
+{
+    ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
+
+    uint8_t data;
+
+    if(tca9534a_inst == NULL)
+    {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    esp_err_t ret = tca9534_i2c_read(tca9534a_inst, TCA9534A_CONFIG_REG);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Error reading configuration from [config_reg-0x%02X], returned %s", TCA9534A_CONFIG_REG, esp_err_to_name(ret));
+        return ret;
+    }
+
+    ESP_LOGI(TAG, "Configuration read from [config_reg-0x%02X] is 0x%02X", TCA9534A_CONFIG_REG, data)
+    *port = data;
+    return ESP_OK;
+}
+
 esp_err_t tca9534_set_pin_direction(const TCA9534 *tca9534a_inst, uint8_t pin, tca9534a_pintype_t pin_type)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
@@ -151,15 +168,8 @@ esp_err_t tca9534_set_pin_direction(const TCA9534 *tca9534a_inst, uint8_t pin, t
 
     uint8_t data = 0;
 
-    esp_err_t ret = tca9534_i2c_read(tca9534a_inst, TCA9534A_CONFIG_REG, &data);
-    if (ret != ESP_OK)
-    {
-        ESP_LOGE(TAG, "Error reading configuration in [config_reg-0x%02X], returned %s", TCA9534A_CONFIG_REG, esp_err_to_name(ret));
-        return ret;
-    }
-
-    ESP_LOGI(TAG, "Configuration read from [config_reg-0x%02X] is 0x%02X", TCA9534A_CONFIG_REG, data);
-    data = (pin_type == TCA9534_INPUT)?(data|(1 << pin)):(data&~(1 << pin));
+    tca9534_get_port_direction(tca9534a_inst, &data);
+    data = (pin_type == TCA9534_INPUT)?(data|(1<<pin)):(data&~(1<<pin));
     ret = tca9534_i2c_write(tca9534a_inst, TCA9534A_CONFIG_REG, data);
     if (ret != ESP_OK)
     {
@@ -181,13 +191,7 @@ esp_err_t tca9534_get_pin_direction(const TCA9534 *tca9534a_inst, uint8_t pin, t
 
     uint8_t data = 0;
 
-    esp_err_t ret = tca9534_i2c_read(tca9534a_inst, TCA9534A_CONFIG_REG, &config_data);
-    if (ret != ESP_OK)
-    {
-        ESP_LOGE(TAG, "Error reading configuration in [config_reg-0x%02X], returned %s", TCA9534A_CONFIG_REG, esp_err_to_name(ret));
-        return ret;
-    }
-
+    tca9534_get_port_direction(tca9534a_inst, &data);
     *value = (data&(1 << pin))?TCA9534_INPUT:TCA9534_OUTPUT;
     ESP_LOGI(TAG, "Pin %d direction read from [config_reg-0x%02X] is %s", pin, TCA9534A_CONFIG_REG, (*value == TCA9534_INPUT)?"input":"output");
     return ESP_OK;
@@ -203,14 +207,7 @@ esp_err_t tca9534_set_level(const TCA9534 *tca9534a_inst, uint8_t pin, tca9534a_
 
     uint8_t data;
 
-    esp_err_t ret = tca9534_i2c_read(tca9534a_inst, TCA9534A_OUTPUT_PORT_REG, &data);
-    if (ret != ESP_OK)
-    {
-        ESP_LOGE(TAG, "Error reading configuration in [Output_reg-0x%02X], returned %s", TCA9534A_OUTPUT_PORT_REG, esp_err_to_name(ret));
-        return ret;
-    }
-
-    ESP_LOGI(TAG, "Configuration read from [Output_reg-0x%02X] is 0x%02X", TCA9534A_OUTPUT_PORT_REG, data);
+    tca9534_get_port_direction(tca9534a_inst, &data);
     data = (level == TCA9534_HIGH)?(data|(1 << pin)):(data&~(1 << pin));
     ret = tca9534_i2c_write(tca9534a_inst, TCA9534A_OUTPUT_PORT_REG, data);
     if (ret != ESP_OK)
@@ -245,11 +242,11 @@ esp_err_t tca9534_get_level(const TCA9534 *tca9534a_inst, uint8_t pin, tca9534a_
         ret = tca9534_i2c_read(tca9534a_inst, TCA9534A_INPUT_PORT_REG, &port_level);
         if (ret != ESP_OK)
         {
-            ESP_LOGD(TAG, "Error reading configuration in [Input_reg] 0x%02X, returned %s", TCA9534A_INPUT_PORT_REG, esp_err_to_name(ret));
+            ESP_LOGE(TAG, "Error reading configuration in [Input_reg-0x%02X], returned %s", TCA9534A_INPUT_PORT_REG, esp_err_to_name(ret));
             return ret;
         }
 
-        ESP_LOGD(TAG, "Pin %d is input with level set to %s", pin, (port_level & (1 << pin))?"high":"low");
+        ESP_LOGI(TAG, "Pin %d is input with level set to %s", pin, (port_level & (1 << pin))?"high":"low");
         *level = port_level & (1 << pin) ? TCA9534_HIGH : TCA9534_LOW;
         return ESP_OK;
     }
@@ -258,11 +255,11 @@ esp_err_t tca9534_get_level(const TCA9534 *tca9534a_inst, uint8_t pin, tca9534a_
         ret = tca9534_i2c_read(tca9534a_inst, TCA9534A_OUTPUT_PORT_REG, &port_level);
         if (ret != ESP_OK)
         {
-            ESP_LOGD(TAG, "Error reading configuration in [Output_reg] 0x%02X, returned %s", TCA9534A_OUTPUT_PORT_REG, esp_err_to_name(ret));
+            ESP_LOGE(TAG, "Error reading configuration in [Output_reg-0x%02X], returned %s", TCA9534A_OUTPUT_PORT_REG, esp_err_to_name(ret));
             return ret;
         }
 
-        ESP_LOGD(TAG, "Pin %d is output with level set to %s", pin, (port_level & (1 << pin))?"high":"low");
+        ESP_LOGI(TAG, "Pin %d is output with level set to %s", pin, (port_level & (1 << pin))?"high":"low");
         *level = port_level & (1 << pin) ? 1 : 0;
         return ESP_OK;
     }

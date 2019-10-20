@@ -5,17 +5,6 @@
 #include "freertos/semphr.h"
 #include "driver/i2c.h"
 
-
-//This should be defined at user code level
-#define TCA9534_RTC_INT                    0
-#define TCA9534_PIR_INT                    1
-#define TCA9534_BUZZER                     2
-#define TCA9534_WARN_LED                   3
-#define TCA9534_PIR_RST                    4
-#define TCA9534_SD_WP                      5
-#define TCA9534_SD_CD                      6
-#define TCA9534_BATT_SEL                   7
-
 enum
 {
     TCA9534_OUTPUT = 0,
@@ -51,8 +40,8 @@ typedef struct
 }TCA9534;
 
 esp_err_t tca9534_init(TCA9534 *tca9534a_inst, int address, i2c_port_t port, gpio_num_t intr_pin, const SemaphoreHandle_t *i2c_bus_mutex);
-
 esp_err_t tca9534_set_port_direction(const TCA9534 *tca9534a_inst, uint8_t port);
+esp_err_t tca9534_get_port_direction(const TCA9534 *tca9534a_inst, uint8_t* port);
 esp_err_t tca9534_set_pin_direction(const TCA9534 *tca9534a_inst, uint8_t pin, tca9534a_pintype_t pin_type);
 esp_err_t tca9534_get_pin_direction(const TCA9534 *tca9534a_inst, uint8_t pin, tca9534a_pintype_t *value);
 esp_err_t tca9534_set_level(const TCA9534 *tca9534a_inst, uint8_t pin, tca9534a_level_t level);
