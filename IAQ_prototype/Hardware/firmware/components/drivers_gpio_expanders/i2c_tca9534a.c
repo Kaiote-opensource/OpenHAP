@@ -134,7 +134,7 @@ esp_err_t tca9534_set_port_direction(const TCA9534 *tca9534a_inst, uint8_t port)
     return ESP_OK;
 }
 
-esp_err_t tca9534_get_port_direction(const TCA9534 *tca9534a_inst, uint8_t* port)
+esp_err_t tca9534_get_port_direction(const TCA9534 *tca9534a_inst, uint8_t *port)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
 
@@ -157,7 +157,7 @@ esp_err_t tca9534_get_port_direction(const TCA9534 *tca9534a_inst, uint8_t* port
     return ESP_OK;
 }
 
-esp_err_t tca9534_set_pin_direction(const TCA9534 *tca9534a_inst, uint8_t pin, tca9534a_pintype_t pin_type)
+esp_err_t tca9534_set_pin_direction(const TCA9534 *tca9534a_inst, uint8_t pin, tca9534a_pin_direction_t pin_type)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
 
@@ -181,7 +181,7 @@ esp_err_t tca9534_set_pin_direction(const TCA9534 *tca9534a_inst, uint8_t pin, t
     return ESP_OK;
 }
 
-esp_err_t tca9534_get_pin_direction(const TCA9534 *tca9534a_inst, uint8_t pin, tca9534a_pintype_t *value)
+esp_err_t tca9534_get_pin_direction(const TCA9534 *tca9534a_inst, uint8_t pin, tca9534a_pin_direction_t* pin_direction)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
     if (tca9534a_inst == NULL || pin > 8)

@@ -9,19 +9,13 @@ enum
 {
     TCA9534_OUTPUT = 0,
     TCA9534_INPUT  = 1
-} tca9534a_pintype_t;
+} tca9534a_pin_direction_t;
 
 enum
 {
     TCA9534_LOW  = 0,
     TCA9534_HIGH = 1
 } tca9534a_level_t;
-
-enum
-{
-    TCA9534_ACTIVE_HIGH = 0,
-    TCA9534_ACTIVE_LOW  = 1
-} tca9534a_active_level_t;
 
 enum
 {
