@@ -36,8 +36,8 @@ typedef struct
 esp_err_t tca9534_init(TCA9534 *tca9534a_inst, int address, i2c_port_t port, gpio_num_t intr_pin, const SemaphoreHandle_t *i2c_bus_mutex);
 esp_err_t tca9534_set_port_direction(const TCA9534 *tca9534a_inst, uint8_t port);
 esp_err_t tca9534_get_port_direction(const TCA9534 *tca9534a_inst, uint8_t* port);
-esp_err_t tca9534_set_pin_direction(const TCA9534 *tca9534a_inst, uint8_t pin, tca9534a_pintype_t pin_type);
-esp_err_t tca9534_get_pin_direction(const TCA9534 *tca9534a_inst, uint8_t pin, tca9534a_pintype_t *value);
+esp_err_t tca9534_set_pin_direction(const TCA9534 *tca9534a_inst, uint8_t pin, tca9534a_pin_direction_t pin_type);
+esp_err_t tca9534_get_pin_direction(const TCA9534 *tca9534a_inst, uint8_t pin, tca9534a_pin_direction_t* pin_type);
 esp_err_t tca9534_set_level(const TCA9534 *tca9534a_inst, uint8_t pin, tca9534a_level_t level);
 esp_err_t tca9534_get_level(const TCA9534 *tca9534a_inst, uint8_t pin, tca9534a_level_t *level);
 
