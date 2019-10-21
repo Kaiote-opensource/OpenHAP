@@ -269,7 +269,7 @@ static esp_err_t zh03_verify_checksum(zh03_data_t data_type, uint8_t* data, int 
 static esp_err_t zh03_get_cmd_response(const uint8_t* in_data, int rx_bytes, zh03_command_t command_type_sent, uint16_t* PM1, uint16_t* PM2_5, uint16_t* PM10)
 {
     ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);  
-    if(in_data == NULL || in_size == NULL)
+    if(in_data == NULL || in_size == NULL || rxbytes <= 0)
     {
         return ESP_ERR_INVALID_ARG;
     }
