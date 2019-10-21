@@ -7,19 +7,19 @@ A low cost, opensource research tool with remote measurement capability for non 
 
 * **Associated human behavioral patterns.**
 
-OpenHAP is designed as a modular software/firmware layer with ANSI C compatibility. It utilises open datalogging file formats such as: 
+OpenHAP is designed as a modular software/firmware layer with ANSI C compatibility. It utilises open datalogging file formats such as:
+
+* **.csv** for timestamped measurement data.
+
+* [**.npy**](https://numpy.org/devdocs/reference/generated/numpy.lib.format.html) numpy files for timestamped 2D thermal images for post analysis(2.8 KB size per thermal snapshot).
+
+allowing easy data analysis in python, matlab and R while allowing you extend the software and build new hardware components to suit your measurement needs.
 
 ![OpenHAP gif](assets/OpenHAP.gif)
 
 ![OpenHAP image](https://cdn.hackaday.io/images/8859711566748764412.png)
 
 [![OpenHAP video](assets/youtube.png)](https://youtu.be/QYEUmKjlSp0)
-
-* **.csv** for timestamped measurement data.
-
-* **.npy** numpy files for timestamped 2D thermal images for post analysis(2.8 kilobytes per image)
-
-allowing easy data analysis in python, matlab and R while allowing you extend the software and build new hardware components to suit your measurement needs. 
 
 # Sample results
 
