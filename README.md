@@ -1,4 +1,7 @@
 # OpenHAP
+
+![OpenHAP image](https://cdn.hackaday.io/images/8859711566748764412.png)
+
 A low cost, opensource research tool with remote measurement capability for non invasive, stationary monitoring of:
 
 * **Household air pollution.**
@@ -15,9 +18,7 @@ OpenHAP is designed as a modular software/firmware layer with ANSI C compatibili
 
 allowing easy data analysis in python, matlab and R while allowing you extend the software and build new hardware components to suit your measurement needs.
 
-![OpenHAP gif](assets/OpenHAP.gif)![OpenHAP image](https://cdn.hackaday.io/images/8859711566748764412.png)
-
-[![OpenHAP video](assets/youtube.png)](https://youtu.be/QYEUmKjlSp0)
+![OpenHAP gif](assets/OpenHAP.gif)
 
 # Sample results
 
