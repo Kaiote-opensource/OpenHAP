@@ -1,5 +1,11 @@
 <h1 align="center">OpenHAP</h1>
-<p align="center">An opensource research tool with remote measurement capability for monitoring household air pollution, stove temperatures and associated human behavioral patterns. OpenHAP is designed as a modular software layer, utilising open datalogging file formats in .csv for measurement data or numpy .npy files for time encoded thermal images, allowing easy data analysis in python, matlab and R and allowing you extend the software and build new hardware components to suit your measurement needs</p>
+<p align="center">An opensource research tool with remote measurement capability for non invasive, stationary monitoring of:
+<ul>
+  <li>Household air pollution</li>
+  <li>Stove temperatures and stove stacking</li>
+  <li>Associated human behavioral patterns</li>
+</ul></p> 
+<p align="center">OpenHAP is designed as a modular software layer, utilising open datalogging file formats such as .csv for measurement data or numpy .npy files for timestamped thermal images, allowing easy data analysis in python, matlab and R and allowing you extend the software and build new hardware components to suit your measurement needs.</p>
 
 ![OpenHAP gif](assets/OpenHAP.gif)
 
