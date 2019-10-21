@@ -1,13 +1,13 @@
 EESchema Schematic File Version 4
 LIBS:sensor-node-cache
-EELAYER 26 0
+EELAYER 29 0
 EELAYER END
 $Descr A4 11693 8268
 encoding utf-8
 Sheet 3 3
-Title ""
-Date ""
-Rev ""
+Title "OpenHAP"
+Date "2019-08-19"
+Rev "1"
 Comp ""
 Comment1 ""
 Comment2 ""
@@ -278,6 +278,32 @@ F 1 "MountingHole" H 7900 3955 50  0000 L CNN
 F 2 "MountingHole:MountingHole_2.7mm_M2.5" H 7800 4000 50  0001 C CNN
 F 3 "~" H 7800 4000 50  0001 C CNN
 	1    7800 4000
+	1    0    0    -1  
+$EndComp
+$Comp
+L KAIOTE_FAB:AQ_logo LOGO?
+U 1 1 5D5F97D7
+P 7590 7000
+AR Path="/5D5F97D7" Ref="LOGO?"  Part="1" 
+AR Path="/5C7EC132/5D5F97D7" Ref="LOGO?"  Part="1" 
+F 0 "LOGO?" H 7590 6850 60  0001 C CNN
+F 1 "AQ_logo" H 7590 7200 60  0001 C CNN
+F 2 "lib_kaiote:AQ" H 7591 7188 50  0001 C CNN
+F 3 "" H 7590 7000 50  0001 C CNN
+	1    7590 7000
+	1    0    0    -1  
+$EndComp
+$Comp
+L KAIOTE_FAB:kaiote_logo LOGO?
+U 1 1 5D5F97DD
+P 7450 6800
+AR Path="/5D5F97DD" Ref="LOGO?"  Part="1" 
+AR Path="/5C7EC132/5D5F97DD" Ref="LOGO?"  Part="1" 
+F 0 "LOGO?" H 7450 6600 60  0001 C CNN
+F 1 "kaiote_logo" H 7450 7000 60  0001 C CNN
+F 2 "lib_kaiote:pcb-logo" H 7446 7020 50  0001 C CNN
+F 3 "" H 7450 6800 50  0001 C CNN
+	1    7450 6800
 	1    0    0    -1  
 $EndComp
 $EndSCHEMATC

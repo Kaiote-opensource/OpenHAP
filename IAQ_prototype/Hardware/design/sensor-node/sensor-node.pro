@@ -1,4 +1,4 @@
-update=Wed 20 Feb 2019 12:49:03 EAT
+update=Tue 27 Aug 2019 11:58:25 EAT
 version=1
 last_client=kicad
 [general]
@@ -34,7 +34,7 @@ LibDir=
 [schematic_editor]
 version=1
 PageLayoutDescrFile=
-PlotDirectoryName=
+PlotDirectoryName=/home/alois/Documents/
 SubpartIdSeparator=0
 SubpartFirstId=65
 NetFmtName=
