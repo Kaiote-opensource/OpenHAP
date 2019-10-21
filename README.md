@@ -19,6 +19,8 @@ OpenHAP is designed as a modular software/firmware layer with ANSI C compatibili
 
 * **.npy** numpy files for timestamped 2D thermal images for post analysis(2.8 kilobytes per image)
 
+/home/alois/Documents/projects/IAQ_cookstove_monitoring/
+![2D thermal](firmware/components/drivers_thermal_imagers/python/Figure_1.png)![3D thermal](firmware/components/drivers_thermal_imagers/python/rotate_elevation_angle_3d_surf.gif)
 allowing easy data analysis in python, matlab and R while allowing you extend the software and build new hardware components to suit your measurement needs. 
 
 # Sample results
