@@ -23,7 +23,7 @@ allowing easy data analysis in python, matlab and R while allowing you extend th
 
 # Sample results
 
-![OpenHAP results kibera](samples/analysis_tools/kibera.jpg)
+![OpenHAP results kibera](assets/results.jpg)
 
 # Documentation
 OpenHAP's story is covered in [this hackaday article](https://hackaday.com/2019/09/24/fighting-household-air-pollution/) with indepth technical documentation at [this link](https://hackaday.io/project/166510-openhap)
