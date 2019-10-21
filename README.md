@@ -1,6 +1,6 @@
 # OpenHAP
 
-![OpenHAP image](https://cdn.hackaday.io/images/8859711566748764412.png)
+![OpenHAP image](assets/OpenHAP_labelled.jpg)
 
 A low cost, opensource research tool with remote measurement capability for non invasive, stationary monitoring of:
 
