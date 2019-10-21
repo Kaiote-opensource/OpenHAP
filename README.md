@@ -15,9 +15,7 @@ OpenHAP is designed as a modular software/firmware layer with ANSI C compatibili
 
 allowing easy data analysis in python, matlab and R while allowing you extend the software and build new hardware components to suit your measurement needs.
 
-![OpenHAP gif](assets/OpenHAP.gif)
-
-![OpenHAP image](https://cdn.hackaday.io/images/8859711566748764412.png)
+![OpenHAP gif](assets/OpenHAP.gif)![OpenHAP image](https://cdn.hackaday.io/images/8859711566748764412.png)
 
 [![OpenHAP video](assets/youtube.png)](https://youtu.be/QYEUmKjlSp0)
 
