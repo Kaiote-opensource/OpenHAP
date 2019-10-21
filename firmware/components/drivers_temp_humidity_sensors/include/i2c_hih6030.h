@@ -4,42 +4,27 @@
 #include "freertos/semphr.h"
 #include "driver/i2c.h"
 
-#define HIH6030_PAYLOAD_BYTES              4
-
-#define HIH6030_STATUS_BIT_WIDTH           2
-#define HIH6030_STATUS_START_BYTE          0
-#define HIH6030_STATUS_END_BYTE            0
-#define HIH6030_STATUS_START_POS           7
-
-#define HIH6030_HUMIDITY_BIT_WIDTH         14
-#define HIH6030_HUMIDITY_START_BYTE        1
-#define HIH6030_HUMIDITY_END_BYTE          0
-#define HIH6030_HUMIDITY_START_POS         0
-
-#define HIH6030_TEMPERATURE_BIT_WIDTH      14
-#define HIH6030_TEMPERATURE_START_BYTE     3
-#define HIH6030_TEMPERATURE_END_BYTE       2
-#define HIH6030_TEMPERATURE_START_POS      2
-
-
 typedef enum {
     HIH6030_VALID_DATA = 0,
     HIH6030_STALE_DATA,
-    HIH6030_COMMAND_MODE,
+    HIH6030_COMMAND_MODE
 } hih6030_status_t;
+
+typedef enum {
+    HIH6030_HUMIDITY_ONLY = 0,
+    HIH6030_TEMP_HUMIDITY
+} hih6030_meas_type_t;
+
+tca9534a_register_t
 
 typedef struct
 {
     int address;
-    i2c_port_t port;
+    i2c_port_t i2c_port;
     SemaphoreHandle_t i2c_bus_mutex;
 }HIH6030;
 
-esp_err_t HIH6030_init(HIH6030* HIH6030_inst, int address, i2c_port_t port, SemaphoreHandle_t* bus_mutex);
-
-esp_err_t get_temp_humidity(HIH6030* HIH6030_inst, hih6030_status_t* status, float* temperature_val, float* humidity_val);
-
-/*Only to be used if device is the only one on the i2c bus or for testing*/
-// esp_err_t HIH6030_deinit(i2c_port_t port);
+esp_err_t HIH6030_init(HIH6030* hih6030_inst, int address, i2c_port_t port, SemaphoreHandle_t* bus_mutex);
+esp_err_t hih6030_get_measurement(HIH6030* hih6030_inst, hih6030_meas_type_t measurement_type, hih6030_status_t* status, float* temperature, float* humidity);
 
 #endif
