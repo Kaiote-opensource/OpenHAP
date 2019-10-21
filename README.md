@@ -1,6 +1,6 @@
 # OpenHAP
 
-![OpenHAP image](assets/OpenHAP_labelled.jpg)
+![OpenHAP image](assets/OpenHAP_labelled.png)
 
 A low cost, opensource research tool with remote measurement capability for non invasive, stationary monitoring of:
 
