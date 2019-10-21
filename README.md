@@ -1,6 +1,6 @@
 <h1 align="center">OpenHAP</h1>
 <p align="center">An opensource research tool with remote measurement capability for non invasive, stationary monitoring of:
-<ul>
+<ul align="center">
   <li>Household air pollution</li>
   <li>Stove temperatures and stove stacking</li>
   <li>Associated human behavioral patterns</li>
