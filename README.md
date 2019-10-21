@@ -20,7 +20,7 @@ allowing easy data analysis in python, matlab and R while allowing you extend th
 
 ![OpenHAP image](https://cdn.hackaday.io/images/8859711566748764412.png)
 
-[![OpenHAP video](ssets/youtube.png)](https://youtu.be/QYEUmKjlSp0)
+[![OpenHAP video](assets/youtube.png)](https://youtu.be/QYEUmKjlSp0)
 
 # Documentation
 OpenHAP's story is covered in [this hackaday article](https://hackaday.com/2019/09/24/fighting-household-air-pollution/) with indepth technical documentation at [this link](https://hackaday.io/project/166510-openhap)
