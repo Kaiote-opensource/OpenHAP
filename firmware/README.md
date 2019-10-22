@@ -1,6 +1,6 @@
 # Firmware
 
-[OpenHAP Firmware](https://cdn.hackaday.io/images/6678741566922513774.png)
+![OpenHAP Firmware](https://cdn.hackaday.io/images/6678741566922513774.png)
 
 OpenHAP's firmware controls all the above
 
