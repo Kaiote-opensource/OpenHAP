@@ -22,10 +22,10 @@ allowing easy data analysis in python, matlab and R while allowing you extend th
 
 # Sample results
 
-![OpenHAP results kiambu](assets/results_kiambu.png)
+![OpenHAP results kiambu](assets/results-kiambu.png)
 Measurement results for rural Kiambu, Kenya. Household energy use - Three Stone Open Fire(TSOF)
 
-![OpenHAP results kibera](assets/results_kibera.jpg)
+![OpenHAP results kibera](assets/results-kibera.jpg)
 Measurement results for urban Kibera, Kenya. Household energy use - Kerosene and charcoal briquettes.
 
 # Documentation
