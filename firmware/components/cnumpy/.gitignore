@@ -1,0 +1,2 @@
+*.npy  #Any npy output files
+*.out  #Any output files
