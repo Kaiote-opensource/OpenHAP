@@ -10,7 +10,7 @@ A low cost, opensource research tool with remote measurement capability for non 
 
 * **Associated human behavioral patterns.**
 
-OpenHAP is designed as a modular software/firmware layer with ANSI C compatibility. It utilises open datalogging file formats such as:
+OpenHAP is designed as a modular software/firmware layer that supports customizable measurement hardware. It utilises open datalogging file formats such as:
 
 * **.csv** for timestamped measurement data.
 
