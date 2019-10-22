@@ -1,2 +1,3 @@
 *.npy  #Any npy output files
 *.out  #Any output files
+.ipynb_checkpoints #Saved Jupyter notebook checkpoints
