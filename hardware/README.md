@@ -1,3 +1,3 @@
 # Hardware versions
 
-* alpha_genesis - Initial hardware version
+* **alpha_genesis** - Initial hardware version
