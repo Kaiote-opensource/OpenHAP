@@ -14,7 +14,7 @@ OpenHAP is designed as a modular software/firmware layer with ANSI C compatibili
 
 * **.csv** for timestamped measurement data.
 
-* [**.npy**](https://numpy.org/devdocs/reference/generated/numpy.lib.format.html) numpy files for timestamped 2D thermal images for post analysis(2.8 KB size per thermal snapshot).
+* [**.npy**](https://numpy.org/devdocs/reference/generated/numpy.lib.format.html) numpy files for timestamped 2D thermal images for post analysis(2.8 KiB size per thermal snapshot).
 
 allowing easy data analysis in python, matlab and R while allowing you extend the software and build new hardware components to suit your measurement needs.
 
