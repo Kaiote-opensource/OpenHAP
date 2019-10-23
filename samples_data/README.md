@@ -4,7 +4,7 @@ Real world data captured by OpenHAP and associated simple data analysis examples
 
 ## CSV data fields
 
-* **Time**- Time the data was recorded in Unix time(Elapsed time in seconds since the unix epoch 00:00:00 UTC - 1 January 1970). The time is recorded at the start of the measurement interval before measurements are A good tool to decode this non-programatically is https://www.epochconverter.com/.
+* **Time**- Absolute time of measurement in Unix time(Elapsed time in seconds since the unix epoch 00:00:00 UTC - 1 January 1970). A good tool to decode this non-programatically is https://www.epochconverter.com/.
 
 * **Mean temp**- Mean of all 24x32 pixel temperatures in OpenHAP's thermal imager's field of view(FOV).
 
