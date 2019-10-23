@@ -1,5 +1,4 @@
 # OpenHAP
-
 A low cost, opensource research tool with remote measurement capability for non invasive, stationary monitoring of household air pollution.
 
 [![license](https://img.shields.io/github/license/Kaiote-opensource/OpenHAP)](LICENSE)
