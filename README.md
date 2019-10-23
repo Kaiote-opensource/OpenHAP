@@ -1,9 +1,15 @@
 # OpenHAP
+
+A low cost, opensource research tool with remote measurement capability for non invasive, stationary monitoring of household air pollution.
+
+[![license](https://img.shields.io/github/license/Kaiote-opensource/OpenHAP)](LICENSE)
 [![Codacy Badge](https://api.codacy.com/project/badge/Grade/4911e62efbd54dd890d5ed8690ef7a78)](https://www.codacy.com/manual/aloismbutura/OpenHAP?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=Kaiote-opensource/OpenHAP&amp;utm_campaign=Badge_Grade)
+
+---
 
 ![OpenHAP image](assets/OpenHAP_labelled.png)
 
-A low cost, opensource research tool with remote measurement capability for non invasive, stationary monitoring of:
+General parameters monitored include: 
 
 * **Household air pollution.**
 
