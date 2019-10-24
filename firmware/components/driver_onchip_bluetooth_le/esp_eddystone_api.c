@@ -33,7 +33,8 @@ static esp_err_t esp_eddystone_tlm_received(const uint8_t* buf, uint8_t len, esp
 static esp_err_t esp_eddystone_get_inform(const uint8_t* buf, uint8_t len, esp_eddystone_result_t* res);
 
 /* Eddystone-URL scheme prefixes */
-static const char* eddystone_url_prefix[4] = {
+static const char* eddystone_url_prefix[4]= 
+{
     "http://www.",
     "https://www.",
     "http://",
@@ -41,7 +42,8 @@ static const char* eddystone_url_prefix[4] = {
 };
 
 /* Eddystone-URL HTTP URL encoding */
-static const char* eddystone_url_encoding[14] = {
+static const char* eddystone_url_encoding[14]=
+{
     ".com/",
     ".org/",
     ".edu/",
@@ -84,39 +86,62 @@ Byte offset	    Field	       Description
 /* decode and store received UID */
 static esp_err_t esp_eddystone_uid_received(const uint8_t* buf, uint8_t len, esp_eddystone_result_t* res)
 {
+   ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
+   if(buf == NULL)
+   {
+      return ESP_ERR_INVALID_ARG;
+   }
+   
     uint8_t pos = 0;
-    //1-byte Ranging Data + 10-byte Namespace + 6-byte Instance
-    if((len != EDDYSTONE_UID_DATA_LEN) && (len != (EDDYSTONE_UID_RFU_LEN+EDDYSTONE_UID_DATA_LEN))) {
-        //ERROR:uid len wrong
-        return -1;
+   
+    /*1-byte Ranging Data + 10-byte Namespace + 6-byte Instance*/
+    if((len != EDDYSTONE_UID_DATA_LEN) && (len != (EDDYSTONE_UID_RFU_LEN+EDDYSTONE_UID_DATA_LEN)))
+    {
+        /*UID len wrong*/
+        return ESP_FAIL;
     }
+   
     res->inform.uid.ranging_data = buf[pos++];
-    for(int i=0; i<EDDYSTONE_UID_NAMESPACE_LEN; i++) {
+    for(int i=0; i<EDDYSTONE_UID_NAMESPACE_LEN; i++)
+    {
         res->inform.uid.namespace_id[i] = buf[pos++];
     }
-    for(int i=0; i<EDDYSTONE_UID_INSTANCE_LEN; i++) {
+   
+    for(int i=0; i<EDDYSTONE_UID_INSTANCE_LEN; i++)
+    {
         res->inform.uid.instance_id[i] = buf[pos++];
     }
-    return 0;
+   
+    return ESP_OK;
 }
 
 /* resolve received URL to url_res pointer */
 static char* esp_eddystone_resolve_url_scheme(const uint8_t *url_start, const uint8_t *url_end)
 {
-    int pos = 0;
-    static char url_buf[100] = {0};
-    const uint8_t *p = url_start;
-
-    pos += sprintf(&url_buf[pos], "%s", eddystone_url_prefix[*p++]);
-
-    for (; p <= url_end; p++) {
-        if (esp_eddystone_is_char_invalid((*p))) {
-            pos += sprintf(&url_buf[pos], "%s", eddystone_url_encoding[*p]);
-        } else {
-            pos += sprintf(&url_buf[pos], "%c", *p);
-        }
-    }
-    return url_buf;
+   ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
+   if(url_start == NULL || url_end == NULL)
+   {
+      return ESP_ERR_INVALID_ARG;
+   }
+   
+   int pos = 0;
+   static char url_buf[100] = {0};
+   const uint8_t *p = url_start;
+   
+   pos += sprintf(&url_buf[pos], "%s", eddystone_url_prefix[*p++]);
+   for (; p <= url_end; p++)
+   {
+       if (esp_eddystone_is_char_invalid((*p)))
+       {
+           pos += sprintf(&url_buf[pos], "%s", eddystone_url_encoding[*p]);
+       }
+       else
+       {
+           pos += sprintf(&url_buf[pos], "%c", *p);
+       }
+   }
+   
+   return url_buf;
 }
 
 /************************** Eddystone-URL *************
@@ -130,17 +155,26 @@ Frame Specification
 /* decode and store received URL, the pointer url_res points to the resolved url */
 static esp_err_t esp_eddystone_url_received(const uint8_t* buf, uint8_t len, esp_eddystone_result_t* res)
 {
+    ESP_LOGD(TAG, "ENTERED FUNCTION [%s]", __func__);
+    if(buf == NULL)
+    {
+       return ESP_ERR_INVALID_ARG;
+    }
+   
     char *url_res = NULL;
     uint8_t pos = 0;
-    if(len-EDDYSTONE_URL_TX_POWER_LEN > EDDYSTONE_URL_MAX_LEN) {
-        //ERROR:too long url
+   
+    if(len-EDDYSTONE_URL_TX_POWER_LEN > EDDYSTONE_URL_MAX_LEN)
+    {
+        /*Too long url*/
         return -1;
     }
+   
     res->inform.url.tx_power = buf[pos++];   
     url_res = esp_eddystone_resolve_url_scheme(buf+pos, buf+len-1);
     memcpy(&res->inform.url.url, url_res, strlen(url_res));
     res->inform.url.url[strlen(url_res)] = '\0';
-    return 0;
+    return ESP_OK;
 }
 
 /****************** eddystone-tlm ***************
