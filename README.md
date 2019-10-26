@@ -34,7 +34,7 @@ Measurement results for rural Kiambu, Kenya. Household energy use - Three Stone 
 ![OpenHAP results kibera](assets/results-kibera.jpg)
 Measurement results for urban Kibera, Kenya. Household energy use - Kerosene and charcoal briquettes.
 
-# OpenHAP's power consumption
+# OpenHAP's power consumption profile
 ![OpenHAP results kiambu](assets/consumption.png)
 Power consumption of an OpenHAP unit. Various measurement parameters can be seen to affect battery life.
 
