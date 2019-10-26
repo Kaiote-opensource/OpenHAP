@@ -28,12 +28,15 @@ allowing easy data analysis in python, matlab and R while allowing you extend th
 ![OpenHAP gif](assets/OpenHAP.gif)
 
 # Sample results
-
 ![OpenHAP results kiambu](assets/results-kiambu.png)
 Measurement results for rural Kiambu, Kenya. Household energy use - Three Stone Open Fire(TSOF)
 
 ![OpenHAP results kibera](assets/results-kibera.jpg)
 Measurement results for urban Kibera, Kenya. Household energy use - Kerosene and charcoal briquettes.
+
+# OpenHAP's power consumption
+![OpenHAP results kiambu](assets/consumption.png)
+Power consumption of an OpenHAP unit. Various measurement parameters can be seen to affect battery life.
 
 # Documentation
 OpenHAP's story is covered in [this hackaday article](https://hackaday.com/2019/09/24/fighting-household-air-pollution/) with indepth technical documentation at [this link](https://hackaday.io/project/166510-openhap)
