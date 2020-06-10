@@ -14,7 +14,7 @@ General parameters monitored include:
 
 * **Stove temperatures** in order to attribute pollution measurements above to stove characteristics while in use to answer questions such as - What phase of stove use is pollution highest for a given stove type?
 
-* **Associated human behavioral patterns.** The device infers this by processing signal strength statistics of wireless signals(RSSI) from a non invasive bluetooth wrist strap worn by the members of the household being monitored.
+* **Associated human behavioral patterns.** This is to infer behaviour that may have an indirect contribution to pollution. The device infers this by processing wireless signal statistics from a bluetooth wrist strap worn by the members of the household under study.
 
 OpenHAP is designed as a modular software/firmware layer that supports customizable measurement hardware. It utilises open datalogging file formats such as:
 
