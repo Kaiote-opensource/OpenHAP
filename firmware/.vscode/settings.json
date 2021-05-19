@@ -10,6 +10,9 @@
         "btc_manage.h": "c",
         "array": "c",
         "string_view": "c",
-        "stddef.h": "c"
+        "stddef.h": "c",
+        "esp_err.h": "c",
+        "unity.h": "c",
+        "i2c_hih6030.h": "c"
     }
 }

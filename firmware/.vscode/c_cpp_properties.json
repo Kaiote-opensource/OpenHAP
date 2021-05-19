@@ -1,54 +1,29 @@
 {
+    "env": {
+        "espIdfComponentsPath": "/home/badass/esp/esp-idf/components",
+        "espIdfEsp32ToolchainPath": "/home/badass/.espressif/tools/xtensa-esp32-elf/esp-2020r3-8.4.0//xtensa-esp32-elf/bin",
+        "projectComponentsPath": "/home/badass/Documents/projects/Kaiote/OpenHAP/firmware/components"
+    },
     "configurations": [
         {
             "name": "Linux",
             "includePath": [
                 "${workspaceFolder}/**",
-                "/home/alois/Documents/build_systems/espressif/esp-idf/components/bt/bluedroid/api/include/api",
-                "/home/alois/Documents/build_systems/espressif/esp-idf/components/esp32/include",
-                "/home/alois/Documents/build_systems/espressif/esp-idf/components/freertos/include",
-                "/home/alois/Documents/build_systems/espressif/esp-idf/components/newlib/include",
-                "/home/alois/Documents/build_systems/espressif/esp-idf/components/spi_flash/sim",
-                "/home/alois/Documents/build_systems/espressif/esp-idf/components/log/include",
-                "/home/alois/Documents/build_systems/espressif/esp-idf/components/soc/esp32/include",
-                "/home/alois/Documents/build_systems/espressif/esp-idf/components/heap/include",
-                "/home/alois/Documents/build_systems/espressif/esp-idf/components/soc/include",
-                "/home/alois/Documents/build_systems/espressif/esp-idf/components/driver/include",
-                "/home/alois/Documents/build_systems/espressif/esp-idf/components/mbedtls/mbedtls/include",
-                "/home/alois/Documents/build_systems/espressif/esp-idf/components/tcpip_adapter/include",
-                "/home/alois/Documents/build_systems/espressif/esp-idf/components/bt/include",
-                "/home/alois/Documents/build_systems/espressif/esp-idf/components/nvs_flash/include",
-                "/home/alois/Documents/build_systems/espressif/esp-idf/components/esp_adc_cal/include",
-                "/home/alois/Documents/build_systems/espressif/esp-idf/components/spi_flash/include",
-                "/home/alois/Documents/build_systems/espressif/esp-idf/components/lwip/include/lwip",
-                "/home/alois/Documents/build_systems/espressif/esp-idf/components/bt/bluedroid/btc/include/btc",
-                "/home/alois/Documents/build_systems/espressif/esp-idf/components/bt/bluedroid/bta/include",
-                "/home/alois/Documents/build_systems/espressif/esp-idf/components/bt/bluedroid/common/include",
-                "/home/alois/Documents/build_systems/espressif/esp-idf/components/bt/bluedroid/stack/include",
-                "/home/alois/Documents/build_systems/espressif/esp-idf/components/bt/bluedroid/osi/include",
-                "/home/alois/Documents/build_systems/espressif/esp-idf/components/bt/bluedroid/btc/include",
-                "/home/alois/Documents/build_systems/espressif/esp-idf/components/bt/bluedroid/btc/profile/std/include",
-                "/home/alois/Documents/build_systems/espressif/esp-idf/components/bt/bluedroid/btc/profile/esp/include",
-                "/home/alois/Documents/build_systems/espressif/esp-idf/components/esp_ringbuf/include",
-                "/home/alois/Documents/build_systems/espressif/esp-idf/components/lwip/lwip/src/include",
-                "/home/alois/Documents/build_systems/espressif/esp-idf/components/coap/libcoap/examples/lwip",
-                "/home/alois/Documents/build_systems/espressif/esp-idf/components/fatfs/src",
-                "/home/alois/Documents/build_systems/espressif/esp-idf/components/esp_common/include",
-                "/home/alois/Documents/build_systems/espressif/esp-idf/components/xtensa/include",
-                "/home/alois/Documents/build_systems/espressif/esp-idf/components/xtensa/esp32/include",
-                "/home/alois/Documents/build_systems/espressif/esp-idf/components/esp_rom/include"
+                "${espIdfComponentsPath}/**",
+                "${projectComponentsPath}/**"
             ],
             "defines": [],
-            "compilerPath": "/home/alois/Documents/build_systems/espressif/xtensa-esp32-elf/bin/xtensa-esp32-elf-gcc",
+            "compilerPath": "${espIdfEsp32ToolchainPath}/xtensa-esp32-elf-c++ ",
             "cStandard": "c99",
-            "cppStandard": "c++17",
-            "intelliSenseMode": "clang-x64",
+            "cppStandard": "c++14",
+            "intelliSenseMode": "gcc-x86",
             "browse": {
                 "path": [
-                    "/home/alois/Documents/build_systems/espressif/esp-idf/components/",
-                    "/home/alois/Documents/projects/IAQ_cookstove_monitoring/IAQ_prototype/Hardware/firmware"
+                    "${workspaceFolder}",
+                    "${espIdfComponentsPath}",
+                    "${projectComponentsPath}"
                 ],
-                "limitSymbolsToIncludedHeaders": true
+                "limitSymbolsToIncludedHeaders": false
             }
         }
     ],
